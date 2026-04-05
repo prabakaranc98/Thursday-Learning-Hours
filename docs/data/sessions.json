@@ -1,0 +1,50 @@
+[
+  {
+    "id": "tlh-1",
+    "number": 1,
+    "title": "Applied Cognitive Science × RL × LLMs",
+    "subtitle": "Beyond Scaffolding — Principled Enterprise AI Agents",
+    "date": "TBD",
+    "status": "upcoming",
+    "description": "How Cognitive Science and Reinforcement Learning can solve enterprise-level AI/Agentic problems — beyond simple scaffolding and orchestration harnesses. Covers cognitive architectures (ACT-R, GWT), memory modules, reward shaping, hierarchical RL, and world models.",
+    "tags": ["Cognitive Science", "Reinforcement Learning", "LLMs", "Agents", "Enterprise AI"],
+    "youtube_id": null,
+    "github_folder": "TLH-1-Applied-Cogs-RL-LLMs",
+    "resources": {
+      "slides": {
+        "label": "Slides Outline",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/slides/SLIDES_OUTLINE.md"
+      },
+      "notes": {
+        "label": "Session Notes",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/notes.md"
+      },
+      "reading": {
+        "label": "Reading List (30 papers)",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/reading/README.md"
+      },
+      "resources_link": {
+        "label": "Tools & Resources",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/resources.md"
+      },
+      "report": {
+        "label": "LaTeX Report",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/tex/main.tex"
+      },
+      "experiments": [
+        {
+          "name": "Demo 01 — Cognitive RL Agent",
+          "url": "https://nbviewer.org/github/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/experiments/demo_01_cognitive_rl_agent.ipynb",
+          "type": "notebook",
+          "description": "Episodic memory (ACT-R), knowledge graph, metacognitive gate, and full cognitive agent loop."
+        },
+        {
+          "name": "Demo 02 — RL Tool-Use Policy",
+          "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/experiments/demo_02_rl_llm_tool_use.py",
+          "type": "script",
+          "description": "PPO vs Random vs Greedy/ReAct on a gymnasium tool-selection environment."
+        }
+      ]
+    }
+  }
+]
