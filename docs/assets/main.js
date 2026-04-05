@@ -92,18 +92,18 @@ function renderIndex(sessions) {
   grid.innerHTML = sessions.map(s => `
     <a class="session-card" href="session.html?id=${s.id}">
       <div class="card-header">
-        <div class="session-number">S${s.number}</div>
-        <div class="card-meta">
-          <div class="card-title">${s.title}</div>
-          <div class="card-subtitle">${s.subtitle || ''}</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+        <span class="session-number">TLH-${String(s.number).padStart(2, '0')}</span>
         ${statusBadge(s.status)}
-        <span style="font-size:.8rem;color:var(--text-muted)">${s.date || ''}</span>
+      </div>
+      <div class="card-meta">
+        <div class="card-title">${s.title}</div>
+        ${s.subtitle ? `<div class="card-subtitle">${s.subtitle}</div>` : ''}
       </div>
       <p class="card-desc">${s.description}</p>
-      <div class="tag-list">${(s.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</div>
+      <div class="card-footer">
+        <div class="tag-list">${(s.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</div>
+        ${s.date ? `<span class="card-date">${s.date}</span>` : ''}
+      </div>
       ${cardResources(s)}
     </a>
   `).join('');
@@ -217,17 +217,15 @@ function renderSession(session) {
 
     <div class="detail-header">
       <div class="detail-number-row">
-        <span class="detail-number-badge">Session ${session.number}</span>
+        <span class="detail-number-badge">TLH-${String(session.number).padStart(2, '0')}</span>
         ${statusBadge(session.status)}
         <span class="detail-date">${session.date || 'Date TBD'}</span>
       </div>
       <h1 class="detail-title">${session.title}</h1>
-      <p class="detail-subtitle">${session.subtitle || ''}</p>
+      ${session.subtitle ? `<p class="detail-subtitle">${session.subtitle}</p>` : ''}
       <p class="detail-desc">${session.description}</p>
-      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem">
-        <div class="tag-list">${(session.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</div>
-      </div>
-      <div class="tag-list">${quickLinks}</div>
+      <div class="tag-list" style="margin-bottom:.85rem">${(session.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</div>
+      <div class="card-resources">${quickLinks}</div>
     </div>
 
     <div class="yt-section">${ytHTML}</div>
