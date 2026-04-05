@@ -31,6 +31,14 @@
         "label": "LaTeX Report",
         "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/tex/main.tex"
       },
+      "links": {
+        "label": "Curated Links",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/links.md"
+      },
+      "slides_pptx": {
+        "label": "Slides (PPTX)",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/slides/TLH-1-Applied-Cogs-RL-LLMs.pptx"
+      },
       "experiments": [
         {
           "name": "Demo 01 — Cognitive RL Agent",
