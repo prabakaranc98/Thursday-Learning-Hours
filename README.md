@@ -9,6 +9,7 @@ My initiative to run a weekly seminar/tutorial/demo on foundations, frontiers, a
 | # | Title | Status | Link |
 |---|---|---|---|
 | 1 | Applied Cognitive Science × RL × LLMs | 🟡 Upcoming | [TLH-1](TLH-1-Applied-Cogs-RL-LLMs/README.md) |
+| 2 | Applied Life: Intelligence Meets Living Systems | 🟡 Upcoming | [TLH-2](TLH-2-Applied-Life-Biology/README.md) |
 
 ## Structure
 

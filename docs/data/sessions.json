@@ -4,7 +4,7 @@
     "number": 1,
     "title": "Applied Cognitive Science × RL × LLMs",
     "subtitle": "Beyond Scaffolding — Principled Enterprise AI Agents",
-    "date": "TBD",
+    "date": "Apr 10, 2026",
     "status": "upcoming",
     "description": "How Cognitive Science and Reinforcement Learning can solve enterprise-level AI/Agentic problems — beyond simple scaffolding and orchestration harnesses. Covers cognitive architectures (ACT-R, GWT), memory modules, reward shaping, hierarchical RL, and world models.",
     "tags": ["Cognitive Science", "Reinforcement Learning", "LLMs", "Agents", "Enterprise AI"],
@@ -51,6 +51,58 @@
           "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-1-Applied-Cogs-RL-LLMs/experiments/demo_02_rl_llm_tool_use.py",
           "type": "script",
           "description": "PPO vs Random vs Greedy/ReAct on a gymnasium tool-selection environment."
+        }
+      ]
+    }
+  },
+  {
+    "id": "tlh-2",
+    "number": 2,
+    "title": "Applied Life: Intelligence Meets Living Systems",
+    "subtitle": "AI × Biology — Foundation Models, Protein Design & Perturbation Biology",
+    "date": "Apr 17, 2026",
+    "status": "upcoming",
+    "description": "A landscape survey of AI + Biology: foundation models for biology (AIDO, ESM-3, Evo 2), protein design (AlphaFold 3, RFdiffusion), perturbation biology (GEARS, Perturb-seq), and the CRL frontier — proving that biological FM representations are causally faithful.",
+    "tags": ["Biology", "Foundation Models", "Protein Design", "Perturbation Biology", "Causal ML", "Drug Discovery"],
+    "youtube_id": null,
+    "github_folder": "TLH-2-Applied-Life-Biology",
+    "resources": {
+      "slides": {
+        "label": "Slides Outline",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-2-Applied-Life-Biology/slides/SLIDES_OUTLINE.md"
+      },
+      "notes": {
+        "label": "Session Notes",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-2-Applied-Life-Biology/notes.md"
+      },
+      "reading": {
+        "label": "Reading List (30 papers)",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-2-Applied-Life-Biology/reading/README.md"
+      },
+      "resources_link": {
+        "label": "Tools & Resources",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-2-Applied-Life-Biology/resources.md"
+      },
+      "report": {
+        "label": "LaTeX Report",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-2-Applied-Life-Biology/tex/main.tex"
+      },
+      "links": {
+        "label": "Curated Links",
+        "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-2-Applied-Life-Biology/links.md"
+      },
+      "experiments": [
+        {
+          "name": "Demo 01 — ESM-2 Protein Embeddings",
+          "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-2-Applied-Life-Biology/experiments/demo_01_esm2_protein_embeddings.ipynb",
+          "type": "notebook",
+          "description": "ESM-2 embeddings, zero-shot fitness prediction on TP53 DMS variants, UMAP visualization of the fitness landscape."
+        },
+        {
+          "name": "Demo 02 — Single-Cell Perturbation Analysis",
+          "url": "https://github.com/prabakaranc98/Thursday-Learning-Hours/blob/main/TLH-2-Applied-Life-Biology/experiments/demo_02_singlecell_perturbation.ipynb",
+          "type": "notebook",
+          "description": "Scanpy preprocessing of Norman 2019 Perturb-seq dataset, UMAP, DEG analysis, perturbation vector visualization."
         }
       ]
     }
