@@ -6,10 +6,14 @@ My initiative to run a weekly seminar/tutorial/demo on foundations, frontiers, a
 
 ## Sessions
 
-| # | Title | Status | Link |
-|---|---|---|---|
-| 1 | Applied Cognitive Science × RL × LLMs | 🟡 Upcoming | [TLH-1](TLH-1-Applied-Cogs-RL-LLMs/README.md) |
-| 2 | Applied Life: Intelligence Meets Living Systems | 🟡 Upcoming | [TLH-2](TLH-2-Applied-Life-Biology/README.md) |
+| # | Title | Track | Date | Status | Link |
+|---|---|---|---|---|---|
+| 1 | Diffusion Models from Scratch | Applied Models | Apr 10, 2026 | 🟡 Upcoming | [TLH-1](TLH-1-Applied-Models-Diffusion/README.md) |
+| 2 | Flow Matching | Applied Models | Apr 17, 2026 | ⬜ Planned | TLH-2 |
+| 3 | Diffusion Transformers + Video & World Models | Applied Models | Apr 24, 2026 | ⬜ Planned | TLH-3 |
+| 4 | Diffusion for Biology & Molecular Dynamics | Applied Life | May 1, 2026 | ⬜ Planned | TLH-4 |
+| 5 | Applied Cognitive Science × RL × LLMs | Applied Cogs | May 8, 2026 | ⬜ Planned | [TLH-5](TLH-5-Applied-Cogs-RL-LLMs/README.md) |
+| 6 | Applied Life: AI × Biology Survey | Applied Life | May 15, 2026 | ⬜ Planned | [TLH-6](TLH-6-Applied-Life-Biology/README.md) |
 
 ## Structure
 

@@ -1,0 +1,184 @@
+\documentclass[11pt, a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{bm}
+\usepackage{microtype}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tcolorbox}
+\usepackage{listings}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+\definecolor{copper}{HTML}{8f3e22}
+\definecolor{ivory}{HTML}{f7f3ea}
+\hypersetup{colorlinks=true, linkcolor=copper, urlcolor=copper, citecolor=copper}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{proposition}{Proposition}[section]
+
+\lstset{language=Python, basicstyle=\small\ttfamily, keywordstyle=\color{copper}\bfseries,
+  frame=single, backgroundcolor=\color{ivory}, breaklines=true, columns=fullflexible}
+
+\title{\color{copper}\textbf{Diffusion Transformers + Video \& World Models}\\[4pt]
+  \large TLH-3 · Thursday Learning Hours · Applied Models Track}
+\author{Thursday Learning Hours}
+\date{April 24, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{tcolorbox}[colback=ivory, colframe=copper, title=\textbf{Core Thesis}]
+The U-Net was a pragmatic choice — not a principled one. Vision Transformers process patches
+with global attention from the first layer, follow power-law scaling with compute, and extend
+naturally to video by treating time as another patch dimension. DiT proved this works.
+Sora showed how far it scales.
+\end{tcolorbox}
+
+\tableofcontents
+\newpage
+
+\section{DiT: Diffusion Transformer}
+
+Peebles \& Xie~\cite{peebles2023dit} replace the U-Net with a Vision Transformer backbone.
+
+\subsection{Patchification}
+
+An image $\bm{x}_t \in \mathbb{R}^{H \times W \times C}$ is partitioned into non-overlapping
+patches of size $p \times p$, then projected to a $d$-dimensional hidden space:
+\begin{equation}
+  \text{tokens} = \text{Linear}(\text{reshape}(\bm{x}_t, \tfrac{H}{p}, \tfrac{W}{p}, p^2 C)) \in \mathbb{R}^{N \times d}
+\end{equation}
+where $N = (H/p)(W/p)$ is the number of spatial tokens.
+
+\subsection{Adaptive Layer Norm (adaLN)}
+
+Time and class conditioning via learnable per-token scale and shift:
+\begin{equation}
+  \text{adaLN}(x, t, c) = \gamma(t, c) \odot \text{LayerNorm}(x) + \delta(t, c)
+\end{equation}
+where $\gamma, \delta \in \mathbb{R}^d$ come from a shared MLP over the concatenated time+class embedding.
+
+\subsection{DiT Block}
+
+\begin{equation}
+  x \leftarrow x + \text{gate}_1 \odot \text{Attn}(\text{adaLN}(x, t, c))
+\end{equation}
+\begin{equation}
+  x \leftarrow x + \text{gate}_2 \odot \text{MLP}(\text{adaLN}(x, t, c))
+\end{equation}
+
+After $L$ blocks: linear head + unpatchify → predicted noise $\hat{\bm{\epsilon}}$.
+
+\subsection{Scaling Law}
+
+Peebles \& Xie observe FID $\propto \text{GFLOPs}^{-\alpha}$ — a clean power law — consistent
+with LLM scaling~\cite{kaplan2020scaling}. U-Net counterparts plateau.
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+Model & Params & GFLOPs & FID (ImageNet 256) \\
+\midrule
+DiT-S/2 & 33M & 6 & 68.4 \\
+DiT-B/2 & 130M & 23 & 43.5 \\
+DiT-L/2 & 458M & 80 & 23.3 \\
+DiT-XL/2 & 675M & 118 & 2.27 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Video Diffusion Models}
+
+\subsection{Factorized Space-Time Attention}
+
+Ho et al.~\cite{ho2022video} model video as a 4D tensor $V \in \mathbb{R}^{T \times H \times W \times C}$
+with factorized attention:
+\begin{enumerate}
+  \item Spatial attention: each frame attends over its own $(H, W)$ tokens
+  \item Temporal attention: each spatial position attends over its $T$ temporal instances
+\end{enumerate}
+
+\subsection{Spacetime Patches (Sora)}
+
+Brooks et al.~\cite{brooks2024sora} extend patchification to spacetime:
+\begin{equation}
+  \text{video token}: \Delta t \times p \times p \text{ spacetime patch} \to d\text{-dim vector}
+\end{equation}
+
+A video of $T$ frames with patch size $(p, p)$ and temporal stride $\Delta t$ gives
+$N = \frac{T}{\Delta t} \cdot \frac{H}{p} \cdot \frac{W}{p}$ total tokens. The same
+transformer architecture handles arbitrary $(T, H, W)$ without modification.
+
+\section{World Models via Diffusion}
+
+\subsection{Definition}
+
+A world model approximates $p(s_{t+1} | s_t, a_t)$ — the distribution over next states
+given the current state and action.
+
+\subsection{DIAMOND}
+
+Alonso et al.~\cite{alonso2024diamond} use DDPM to model this distribution:
+\begin{equation}
+  p_\theta(s_{t+1} | s_t, a_t) = \text{DDPM reverse}(\text{noise}; s_t, a_t)
+\end{equation}
+
+Action conditioning via cross-attention: $s_t$ is context (key/value tokens); noise is query.
+This is identical to text-conditional image generation — ``text'' = $(s_t, a_t)$,
+``image'' = $s_{t+1}$.
+
+\subsection{Advantages Over Deterministic Models}
+
+\begin{itemize}
+  \item Multimodal: samples from $p(s_{t+1}|\cdot)$ — captures stochastic environments
+  \item High-fidelity: diffusion generates more realistic observations than RSSM
+  \item Composable: can generate from imagination for model-based RL planning
+\end{itemize}
+
+\section{Key Takeaways}
+
+\begin{enumerate}
+  \item DiT proves ViT scales better than U-Net — FID power law vs plateau.
+  \item Spacetime patches unify image and video — same transformer, more tokens.
+  \item Sora's emergent physics arises from scale, not explicit 3D supervision.
+  \item Diffusion world models are multimodal — unlike deterministic/AR alternatives.
+  \item SiT (DiT + flow matching) shows both architecture and path choice matter.
+\end{enumerate}
+
+\section*{References}
+\begin{thebibliography}{9}
+\bibitem{peebles2023dit}
+  Peebles, W., \& Xie, S. (2023). Scalable Diffusion Models with Transformers (DiT).
+  ICCV 2023. arXiv:2212.09748.
+
+\bibitem{dosovitskiy2021vit}
+  Dosovitskiy, A., et al. (2021). An Image is Worth 16×16 Words: Transformers for Image
+  Recognition at Scale. ICLR 2021. arXiv:2010.11929.
+
+\bibitem{ho2022video}
+  Ho, J., et al. (2022). Video Diffusion Models. NeurIPS 2022. arXiv:2204.03458.
+
+\bibitem{blattmann2023svd}
+  Blattmann, A., et al. (2023). Stable Video Diffusion. arXiv:2311.15127.
+
+\bibitem{brooks2024sora}
+  Brooks, T., et al. (2024). Video Generation Models as World Simulators. OpenAI.
+
+\bibitem{alonso2024diamond}
+  Alonso, E., et al. (2024). DIAMOND: Diffusion for World Model. NeurIPS 2024.
+  arXiv:2405.12399.
+
+\bibitem{bruce2024genie}
+  Bruce, J., et al. (2024). Genie: Generative Interactive Environments. arXiv:2402.15391.
+
+\bibitem{kaplan2020scaling}
+  Kaplan, J., et al. (2020). Scaling Laws for Neural Language Models. arXiv:2001.08361.
+
+\bibitem{ma2024sit}
+  Ma, N., et al. (2024). SiT: Scalable Interpolant Transformers. arXiv:2401.08740.
+\end{thebibliography}
+
+\end{document}
