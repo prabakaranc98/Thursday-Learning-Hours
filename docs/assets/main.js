@@ -35,7 +35,12 @@ const ICONS = {
 
 /* ── Status helpers ─────────────────────────────────────────────────────── */
 
-const STATUS_LABEL = { upcoming: 'Upcoming', recorded: 'Recorded', live: 'Live Now' };
+const STATUS_LABEL = {
+  upcoming: 'Upcoming',
+  planned: 'Planned',
+  recorded: 'Recorded',
+  live: 'Live Now',
+};
 
 function statusBadge(status) {
   return `<span class="status-badge status-${status}">${STATUS_LABEL[status] || status}</span>`;
@@ -83,7 +88,7 @@ function renderIndex(sessions) {
 
   // Stats
   const recorded = sessions.filter(s => s.status === 'recorded').length;
-  const upcoming = sessions.filter(s => s.status === 'upcoming').length;
+  const upcoming = sessions.filter(s => ['upcoming', 'planned'].includes(s.status)).length;
   const el = id => document.getElementById(id);
   if (el('stat-total'))    el('stat-total').textContent    = sessions.length;
   if (el('stat-recorded')) el('stat-recorded').textContent = recorded;

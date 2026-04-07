@@ -348,6 +348,8 @@ a:hover { opacity: .75; text-decoration: none; }
 
 .status-upcoming  { color: #9a7020; }
 .status-upcoming::before  { background: #c49030; }
+.status-planned   { color: #7f5e2a; }
+.status-planned::before   { background: #a57b37; }
 .status-recorded  { color: #346850; }
 .status-recorded::before  { background: #48906c; }
 .status-live      { color: #9a2828; box-shadow: none; }
@@ -356,6 +358,8 @@ a:hover { opacity: .75; text-decoration: none; }
 @media (prefers-color-scheme: dark) {
   .status-upcoming  { color: #c49a40; }
   .status-upcoming::before  { background: #c49a40; }
+  .status-planned   { color: #b88b47; }
+  .status-planned::before   { background: #b88b47; }
   .status-recorded  { color: #50a882; }
   .status-recorded::before  { background: #50a882; }
   .status-live      { color: #d06060; }
