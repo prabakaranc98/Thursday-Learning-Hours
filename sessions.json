@@ -1,0 +1,35 @@
+[
+  {
+    "id": "tlh-1",
+    "number": 1,
+    "date": "2026-05-07",
+    "weekday": "Thursday",
+    "status": "planned",
+    "title": "How to build a JEPA and SSL on Audio/Acoustics",
+    "subtitle": "A BirdCLEF 2026 experiment showcase for predictive acoustic representation learning",
+    "folder": "TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026",
+    "format": "seminar plus experiment walkthrough",
+    "case_study": {
+      "name": "BirdCLEF++ / BirdCLEF 2026",
+      "url": "https://www.imageclef.org/BirdCLEF2026",
+      "kaggle_url": "https://www.kaggle.com/competitions/birdclef-2026/overview",
+      "task": "Identify wildlife species from passive acoustic monitoring recordings collected across the Pantanal wetlands."
+    },
+    "objectives": [
+      "Frame acoustic self-supervised learning as representation learning under limited labels.",
+      "Explain the core JEPA idea: predict latent target representations from context, not raw samples.",
+      "Map audio waveforms to log-mel spectrogram patches suitable for masked predictive learning.",
+      "Sketch a small JEPA-style pretraining loop and downstream species classifier.",
+      "Discuss what changes when moving from a demo to BirdCLEF-scale field audio."
+    ],
+    "artifacts": {
+      "session_readme": "TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026/README.md",
+      "notes": "TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026/notes.md",
+      "links": "TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026/links.md",
+      "resources": "TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026/resources.md",
+      "reading": "TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026/reading/README.md",
+      "experiments": "TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026/experiments/README.md",
+      "slides_outline": "TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026/slides/SLIDES_OUTLINE.md"
+    }
+  }
+]
