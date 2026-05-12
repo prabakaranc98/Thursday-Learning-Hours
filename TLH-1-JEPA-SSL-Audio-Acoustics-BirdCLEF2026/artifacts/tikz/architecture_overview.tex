@@ -1,0 +1,162 @@
+\documentclass[tikz, border=8pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, fit, backgrounds, calc}
+\usepackage{amsmath}
+
+%% ── Palette: muted, publication-ready ────────────────────────────────────────
+\definecolor{cPL} {RGB}{229,240,253}   %% context panel bg
+\definecolor{cPR} {RGB}{242,242,242}   %% target  panel bg
+\definecolor{cIn} {RGB}{186,230,253}   %% input nodes
+\definecolor{cEc} {RGB}{ 30, 64,175}   %% context encoder (indigo)
+\definecolor{cEt} {RGB}{ 71, 85, 99}   %% target  encoder (slate)
+\definecolor{cP1} {RGB}{194, 65, 12}   %% P1 slot predictor (rust)
+\definecolor{cP2} {RGB}{109, 40,217}   %% P2 compose predictor (violet)
+\definecolor{cCl} {RGB}{ 22,101, 52}   %% classifier (forest green)
+\definecolor{cSl} {RGB}{254,215,170}   %% slot fill (peach)
+\definecolor{cLo} {RGB}{185, 28, 28}   %% loss labels (crimson)
+
+\begin{document}
+\begin{tikzpicture}[
+  %% ── Node styles ───────────────────────────────────────────────────────────
+  blk/.style={
+    rectangle, rounded corners=2pt,
+    draw=black!38, line width=0.42pt,
+    align=center, minimum height=0.56cm, minimum width=1.5cm,
+    inner sep=2.5pt, font=\fontsize{6.5}{8}\selectfont\sffamily
+  },
+  slt/.style={
+    rectangle, rounded corners=2pt,
+    draw=cP1!50, line width=0.42pt, fill=cSl,
+    minimum height=0.42cm, minimum width=0.85cm,
+    inner sep=2pt, font=\fontsize{6}{7}\selectfont\sffamily, align=center
+  },
+  %% ── Arrow styles ──────────────────────────────────────────────────────────
+  fw/.style={                                          %% forward pass
+    -{Stealth[length=3.5pt,width=2.2pt]},
+    line width=0.48pt, black!60
+  },
+  ema/.style={                                         %% EMA / stop-grad
+    -{Stealth[length=3.5pt,width=2.2pt]},
+    line width=0.5pt, dash pattern=on 3pt off 1.6pt, black!50
+  },
+  lcon/.style={                                        %% loss connection
+    -{Stealth[length=2.8pt,width=1.8pt]},
+    line width=0.4pt, dotted, cLo!72
+  },
+  %% ── Text styles ───────────────────────────────────────────────────────────
+  ann/.style={
+    font=\fontsize{5.5}{6.5}\selectfont\sffamily, text=black!55, align=center
+  },
+  loss/.style={
+    font=\fontsize{6}{7.2}\selectfont\itshape\sffamily, text=cLo, align=center
+  },
+  hdr/.style={
+    font=\fontsize{5.5}{6.5}\selectfont\bfseries\sffamily
+  },
+]
+
+%% ── Background panels ────────────────────────────────────────────────────────
+\begin{scope}[on background layer]
+  \fill[cPL!55, rounded corners=4pt] (-1.1, 0.54) rectangle (11.65, -4.72);
+  \fill[cPR!55, rounded corners=4pt] (-1.1,-5.10) rectangle (11.65, -7.75);
+\end{scope}
+
+%% ────────────────────────────────────────────────────────────────────────────
+%% ROW 1 — INFERENCE / CONTEXT PATH  (y = 0)
+%% ────────────────────────────────────────────────────────────────────────────
+\node[blk, fill=cIn]            (aud) at (0.00,  0) {\textbf{Audio}\\window};
+\node[blk, fill=cIn]            (mel) at (2.05,  0) {\textbf{Log-Mel}\\spec.};
+\node[blk, fill=cIn]            (pat) at (4.10,  0) {\textbf{Patches}};
+\node[blk, fill=cEc, text=white](ec)  at (6.10,  0) {$\mathbf{E}_c$\\context enc.};
+\node[blk, fill=cP1, text=white](p1)  at (8.75,  0) {\textbf{P1}\\slot attn.};
+
+\draw[fw] (aud) -- (mel);
+\draw[fw] (mel) -- (pat);
+\draw[fw] (pat) -- (ec);
+\draw[fw] (ec)  -- (p1) node[midway, above=1pt, ann] {patch tokens};
+
+%% ── Slot group ───────────────────────────────────────────────────────────────
+\node[slt] (s1)   at (7.75, -1.72) {$s_1,a_1$};
+\node[slt] (sdot) at (8.75, -1.72) {$\cdots$};
+\node[slt] (sk)   at (9.75, -1.72) {$s_K,\!a_K$};
+
+\begin{scope}[on background layer]
+  \node[
+    draw=cP1!42, line width=0.42pt, dashed, rounded corners=3pt,
+    fill=cSl!18, inner sep=3.5pt,
+    fit=(s1)(sk),
+    label={[ann, yshift=-1pt]above:$K$ slots \textit{(unordered set)}}
+  ] (slotbox) {};
+\end{scope}
+\draw[fw] (p1.south) -- (slotbox.north);
+
+%% ── P2 and Classifier ────────────────────────────────────────────────────────
+\node[blk, fill=cP2, text=white](p2)  at (6.30, -3.20) {\textbf{P2}\\compose};
+\node[blk, fill=cCl, text=white](clf) at (10.35,-3.20) {\textbf{Clf}\\multi-label};
+
+\draw[fw] (slotbox.south west) -- (p2.north east);
+\draw[fw] (slotbox.south east) -- (clf.north west);
+
+%% ── Loss labels ──────────────────────────────────────────────────────────────
+\node[loss] (lco) at (6.30, -4.38)
+  {$\hat{z}_{\mathrm{mix}} \!\to\! \mathcal{L}_{\mathrm{comp}}$};
+\node[loss] (lcs) at (10.35,-4.38)
+  {$\hat{y} \!\to\! \mathcal{L}_{\mathrm{cls}}$\enspace(BCE)};
+
+\draw[fw] (p2)  -- (lco);
+\draw[fw] (clf) -- (lcs);
+
+%% ── Panel header ─────────────────────────────────────────────────────────────
+\node[hdr, text=cEc!85] at (-0.75, 0.42) {Context};
+
+%% ────────────────────────────────────────────────────────────────────────────
+%% SEPARATOR
+%% ────────────────────────────────────────────────────────────────────────────
+\draw[black!22, line width=0.48pt, dashed]
+  (-0.9, -4.85) -- (11.45, -4.85)
+  node[midway, below=2pt, ann, font=\fontsize{5}{5.8}\selectfont\itshape\sffamily]
+  {target encoder path \;---\; training only, no gradient flow};
+
+%% ────────────────────────────────────────────────────────────────────────────
+%% ROW 2 — TARGET ENCODER PATH  (y = -5.95)
+%% ────────────────────────────────────────────────────────────────────────────
+\node[blk, fill=cIn]            (cli) at (1.55, -5.95) {$x_A,x_B,x_{\mathrm{bg}}$\\clips};
+\node[blk, fill=cEt, text=white](et)  at (4.15, -5.95) {$\mathbf{E}_t$ (EMA)\\target enc.};
+\node[blk, fill=cSl]            (lat) at (6.90, -5.95) {$z_A,z_B,z_{\mathrm{bg}}$};
+\node[blk, fill=cSl, minimum width=2.6cm]
+                                 (zcp) at (10.20,-5.95)
+  {$z_{\mathrm{comp}}\!=\!\mathrm{norm}\!\bigl(\textstyle\sum\alpha_i z_i\bigr)$};
+
+\draw[fw] (cli) -- (et);
+\draw[fw] (et)  -- (lat);
+\draw[fw] (lat) -- (zcp);
+
+%% ── L_factored ───────────────────────────────────────────────────────────────
+\node[loss] (lfa) at (8.35, -7.25)
+  {$\mathcal{L}_{\mathrm{fact}}$ \;\textit{(Hungarian set matching)}};
+
+%% ── Panel header ─────────────────────────────────────────────────────────────
+\node[hdr, text=cEt!90] at (-0.75, -5.57) {Target};
+
+%% ────────────────────────────────────────────────────────────────────────────
+%% CROSS-PATH LOSS CONNECTIONS  (dotted)
+%% ────────────────────────────────────────────────────────────────────────────
+\draw[lcon] (slotbox.south)
+  to[out=270, in=100, looseness=0.32] (lfa.north west);
+\draw[lcon] (lat.south)
+  to[out=270, in=155] (lfa.west);
+\draw[lcon] (zcp.north)
+  to[out=90,  in=310, looseness=0.42] (lco.south east);
+
+%% ────────────────────────────────────────────────────────────────────────────
+%% EMA ARROW: E_c ─ ─ → E_t  (curves through left margin)
+%% ────────────────────────────────────────────────────────────────────────────
+\draw[ema]
+  (ec.south)
+  .. controls (6.1, -1.5) and (0.8, -4.7) ..
+  (et.north)
+  node[pos=0.44, left=4pt, ann]
+    {\textit{EMA update}\\[-1pt]\textit{/ stop-grad}};
+
+\end{tikzpicture}
+\end{document}

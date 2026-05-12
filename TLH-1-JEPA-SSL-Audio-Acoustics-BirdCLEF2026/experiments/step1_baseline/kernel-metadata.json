@@ -1,0 +1,14 @@
+{
+  "id": "prabakaranchand/fc-audio-jepa-step-1-supervised-baseline",
+  "title": "FC Audio JEPA Step 1 - Supervised Baseline",
+  "code_file": "train.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [],
+  "competition_sources": ["birdclef-2026"],
+  "kernel_sources": []
+}

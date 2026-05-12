@@ -1,0 +1,141 @@
+\documentclass[tikz, border=8pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, calc, backgrounds, decorations.markings}
+\usepackage{amsmath}
+
+%% ── Palette ──────────────────────────────────────────────────────────────────
+\definecolor{cEc} {RGB}{ 30, 64,175}   %% z_A (indigo)
+\definecolor{cCl} {RGB}{ 22,101, 52}   %% z_B (forest green)
+\definecolor{cEt} {RGB}{ 71, 85, 99}   %% z_bg (slate)
+\definecolor{cP1} {RGB}{194, 65, 12}   %% z_comp (rust)
+\definecolor{cP2} {RGB}{109, 40,217}   %% z_mix_hat (violet)
+\definecolor{cLo} {RGB}{185, 28, 28}   %% z_mix_tgt / triangle (crimson)
+\definecolor{cCone}{RGB}{255,237,213}  %% positive cone (peach tint)
+
+\begin{document}
+\begin{tikzpicture}[
+  vec/.style={
+    -{Stealth[length=4pt,width=2.6pt]}, line width=0.7pt
+  },
+  vecm/.style={     %% medium — predicted / target vectors
+    -{Stealth[length=3.5pt,width=2.2pt]}, line width=0.58pt
+  },
+  vecd/.style={     %% dashed — z_bg
+    -{Stealth[length=3.5pt,width=2.2pt]}, line width=0.55pt, dashed,
+    dash pattern=on 3pt off 1.4pt
+  },
+  ann/.style={
+    font=\fontsize{7}{8.5}\selectfont\sffamily, align=center
+  },
+  lann/.style={
+    font=\fontsize{6}{7}\selectfont\sffamily\itshape, text=black!55, align=center
+  },
+]
+
+%% ── Geometry ─────────────────────────────────────────────────────────────────
+\def\R{3.6}         %% radius of unit circle (cm)
+
+\def\angA{42}       %% z_A direction
+\def\angB{108}      %% z_B direction
+\def\angBG{228}     %% z_bg direction  (below-left)
+
+\def\angComp{67}    %% z_comp = norm(z_A + z_B + z_bg)  ≈ approx
+\def\angHat{72}     %% z_mix_hat (predicted, slightly above z_comp)
+\def\angTgt{61}     %% z_mix_tgt (EMA, slightly below z_comp)
+
+%% ── Positive cone ────────────────────────────────────────────────────────────
+\begin{scope}[on background layer]
+  \fill[cCone]
+    (0,0)
+    -- ({\R*cos(\angBG)}, {\R*sin(\angBG)})
+    arc[start angle=\angBG, end angle=\angA+360, radius=\R]
+    -- cycle;
+  \node[lann, text=cP1!55]
+    at ({1.55*cos((\angA+\angComp)/2+5)}, {1.55*sin((\angA+\angComp)/2+5)})
+    {positive\\cone};
+\end{scope}
+
+%% ── Unit circle ──────────────────────────────────────────────────────────────
+\draw[gray!28, line width=0.65pt] (0,0) circle (\R cm);
+
+%% Light reference axes
+\draw[gray!22, line width=0.4pt] (-\R-0.3, 0) -- (\R+0.3, 0);
+\draw[gray!22, line width=0.4pt] (0, -\R-0.3) -- (0, \R+0.3);
+
+%% Origin
+\fill[black!45] (0,0) circle (2pt);
+\node[lann, below left=1.5pt] at (0,0) {$\mathbf{0}$};
+
+%% ── Component vectors ────────────────────────────────────────────────────────
+\draw[vec, color=cEc]
+  (0,0) -- ({\R*cos(\angA)}, {\R*sin(\angA)})
+  node[above right=1.5pt, ann, text=cEc] {$z_A$};
+
+\draw[vec, color=cCl]
+  (0,0) -- ({\R*cos(\angB)}, {\R*sin(\angB)})
+  node[above left=1.5pt, ann, text=cCl] {$z_B$};
+
+\draw[vecd, color=cEt]
+  (0,0) -- ({\R*cos(\angBG)}, {\R*sin(\angBG)})
+  node[below left=1.5pt, ann, text=cEt] {$z_{\mathrm{bg}}$};
+
+%% ── z_comp (heavier — this is the key target) ───────────────────────────────
+\draw[vec, color=cP1, line width=1.0pt]
+  (0,0) -- ({\R*cos(\angComp)}, {\R*sin(\angComp)})
+  node[right=3.5pt, ann, text=cP1]
+    {$z_{\mathrm{comp}}$\\[-1pt]
+     ${\scriptstyle =\,\mathrm{norm}(\sum\!\alpha_i z_i)}$};
+
+%% ── Predicted and target (shorter, near z_comp) ──────────────────────────────
+\def\Rhat{3.35}
+\def\Rtgt{3.25}
+
+\draw[vecm, color=cP2]
+  (0,0) -- ({\Rhat*cos(\angHat)}, {\Rhat*sin(\angHat)})
+  node[right=3pt, ann, text=cP2] {$\hat{z}_{\mathrm{mix}}$};
+
+\draw[vecm, color=cLo]
+  (0,0) -- ({\Rtgt*cos(\angTgt)}, {\Rtgt*sin(\angTgt)})
+  node[right=3pt, ann, text=cLo] {$z_{\mathrm{mix}}^{\mathrm{tgt}}$};
+
+%% ── Triangle (consistency constraint) ────────────────────────────────────────
+\coordinate (Pcomp) at ({\R*cos(\angComp)},    {\R*sin(\angComp)});
+\coordinate (Phat)  at ({\Rhat*cos(\angHat)},  {\Rhat*sin(\angHat)});
+\coordinate (Ptgt)  at ({\Rtgt*cos(\angTgt)},  {\Rtgt*sin(\angTgt)});
+
+\draw[cLo!60, line width=0.7pt]
+  (Pcomp) -- (Phat) -- (Ptgt) -- cycle;
+
+%% Vertex dots
+\fill[cP1] (Pcomp) circle (2.5pt);
+\fill[cP2] (Phat)  circle (2.5pt);
+\fill[cLo] (Ptgt)  circle (2.5pt);
+
+%% ── Triangle consistency callout ─────────────────────────────────────────────
+\draw[gray!40, line width=0.4pt]
+  (Pcomp) to[out=50, in=190] (6.6, 3.0);
+
+\node[
+  rectangle, rounded corners=2.5pt,
+  draw=cLo!42, line width=0.42pt, fill=cLo!5,
+  inner sep=5pt,
+  font=\fontsize{6.5}{8}\selectfont\sffamily, align=left, text=cLo!90,
+  anchor=west
+] at (6.7, 3.0)
+{
+  \textbf{Triangle consistency}\\[2pt]
+  $\hat{z}_{\mathrm{mix}} \approx z_{\mathrm{comp}}$\\
+  $\hat{z}_{\mathrm{mix}} \approx z_{\mathrm{mix}}^{\mathrm{tgt}}$\\
+  $z_{\mathrm{mix}}^{\mathrm{tgt}} \approx z_{\mathrm{comp}}$
+};
+
+%% ── Bottom annotation ────────────────────────────────────────────────────────
+\node[lann] at (0, -\R-0.85)
+  {$\|\mathbf{z}\| = 1$ \quad unit hypersphere \quad cosine distance};
+
+%% Non-negative gates annotation
+\node[lann, text=cP1!80, anchor=east] at (-\R-0.3, 1.6)
+  {$\alpha_i \geq 0$\\non-neg.\\gates};
+
+\end{tikzpicture}
+\end{document}
