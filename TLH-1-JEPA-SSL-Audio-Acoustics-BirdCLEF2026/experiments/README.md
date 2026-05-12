@@ -141,7 +141,29 @@ L = L_cls + 0.5*L_fact + 1.0*L_comp + 0.1*L_div + 0.1*L_var
 
 **Differential LR:** enc_ctx at 3e-5 (10× lower), new heads at 3e-4.
 
-**Current run:** PID 16554 on A100, log: `/workspace/tlh1/logs/step3_20260512_210031.log`
+**Run:** A100, log: `/workspace/tlh1/logs/step3_20260512_210031.log` (complete, 30 epochs)  
+**Best checkpoint:** `/workspace/tlh1/outputs/step3/checkpoints/best.pt` (epoch 1, AUC=0.7265)
+
+#### Step 3 — final results (30 epochs)
+
+| Epoch | val_auc | L_fact | L_comp | L_div | note |
+|---|---|---|---|---|---|
+| 1 | **0.7265** ← best | 0.0068 | 0.0037 | 0.183 | step1 warm start |
+| 5 | 0.7062 | 0.0063 | 0.0014 | 0.048 | JEPA disturbs step1 features |
+| 10 | 0.7115 | 0.0065 | 0.0022 | 0.040 | recovering |
+| 20 | 0.7211 | 0.0065 | 0.0025 | 0.033 | slots diversifying |
+| 30 | 0.7255 | 0.0065 | 0.0024 | 0.030 | stable |
+
+Step 1 baseline: 0.677. Step 3 best: **0.7265** (+0.049 over step 1).
+
+**Critical observation:** L_fact stabilized at 0.0065 from epoch 2 and never improved.
+Random baseline in cosine-MSE space = 2/D ≈ 0.0078. So slots achieve cosine similarity
+of ~0.17 with target representations — marginally better than random. Classification
+(L_cls) did all the work; the JEPA factorization component is not yet contributing
+meaningfully. The AUC gain is entirely from the step1 warm start and CLS bypass head.
+
+**Submission note:** Local A100 copy has no test soundscapes. LB score requires a Kaggle
+kernel that mounts competition test data. Checkpoint to upload: `best.pt` (epoch 1).
 
 #### Step 3 journey and lessons
 
