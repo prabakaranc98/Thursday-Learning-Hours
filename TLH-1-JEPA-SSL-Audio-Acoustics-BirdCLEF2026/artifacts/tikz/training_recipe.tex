@@ -1,0 +1,153 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{microtype}
+
+%% Palette
+\definecolor{cP1}{RGB}{194,65,12}
+\definecolor{cP2}{RGB}{100,40,200}
+\definecolor{cCl}{RGB}{22,101,52}
+\definecolor{cEt}{RGB}{71,85,99}
+
+%% Shorthand
+\newcommand{\stopgrad}[1]{\mathrm{sg}\!\left(#1\right)}
+\newcommand{\norm}[1]{\mathrm{normalize}\!\left(#1\right)}
+
+%% ─── Minimal pseudo-algorithm block ──────────────────────────────────────────
+%% Draws top/bottom rules; content indented uniformly.
+\newcounter{algline}
+\newenvironment{pseudo}[1]{%
+  \setcounter{algline}{0}%
+  \par\addvspace{6pt}%
+  \noindent\rule{\linewidth}{0.8pt}\\[-2pt]%
+  {\small\textbf{#1}}\\[-4pt]%
+  \noindent\rule{\linewidth}{0.4pt}\par%
+  \begin{list}{}{%
+    \setlength{\leftmargin}{1.6em}%
+    \setlength{\itemsep}{1.5pt}%
+    \setlength{\parsep}{0pt}%
+    \setlength{\topsep}{3pt}%
+  }\small%
+}{%
+  \end{list}%
+  \noindent\rule{\linewidth}{0.8pt}\par\addvspace{6pt}%
+}
+
+%% Line with auto-number
+\newcommand{\lLine}[1]{%
+  \item[{\makebox[1.2em][r]{\scriptsize\color{gray}\refstepcounter{algline}\thealgline}}]%
+  #1}
+%% Blank spacer (no number)
+\newcommand{\lSkip}{\item[]}
+%% Section comment (coloured, not numbered)
+\newcommand{\lSec}[2]{\item[]\hspace*{-1.6em}\textcolor{#1}{\textit{--- #2 ---}}}
+%% Right-aligned inline comment
+\newcommand{\lCmt}[1]{\hfill\footnotesize\color{gray}\textit{// #1}}
+
+\begin{document}
+
+\begin{center}
+  {\large\bfseries Factorize-and-Compose Audio-JEPA: Training Recipe}\\[4pt]
+  {\small BirdCLEF 2026 $\cdot$ TLH-1}
+\end{center}
+
+\medskip
+
+\noindent\textbf{Notation.}\quad
+$f_\theta$ context encoder,\;
+$f_{\bar\theta}$ target encoder (EMA copy, no gradient),\;
+$\mathrm{P1}$ slot attention predictor,\;
+$\mathrm{P2}$ composition predictor,\;
+$\mathrm{Clf}$ multi-label classifier,\;
+$K$ fixed number of slots,\;
+$\mathcal{W}$ labeled soundscape windows,\;
+$\mathcal{C}[y]$ curated clips for species $y$,\;
+$\tau$ EMA momentum,\;
+$\lambda_1,\lambda_2$ loss weights.
+
+\bigskip
+
+%% ── Step 1 ───────────────────────────────────────────────────────────────────
+\begin{pseudo}{Step 1 — Supervised Baseline (current implementation)}
+\lLine{\textbf{Input:} dataset $\mathcal{D} = \mathcal{W}_{\mathrm{clip}} \cup \mathcal{W}_{\mathrm{sc}}$;\; species list $\mathcal{T}$ (234 classes)}
+\lLine{\textbf{Output:} trained encoder $f_\theta$ and classifier $\mathrm{Clf}$}
+\lSkip
+\lLine{Initialise $f_\theta$ (small ViT, 3.35M params),\; $\mathrm{Clf}$ (linear $d\!\to\!|\mathcal{T}|$)}
+\lLine{Compute class positive weights $w_c = (N - n_c)/n_c$ clipped to $[1, 50]$}
+\lLine{\textbf{for} each epoch \textbf{do}}
+\lLine{\quad\textbf{for} each batch $(x, \mathbf{y})\sim\mathcal{D}$ \textbf{do}}
+\lLine{\quad\quad $s \leftarrow \mathrm{LogMel}(x)$\lCmt{spectrogram, shape $(1, F, T)$}}
+\lLine{\quad\quad $\mathbf{h} \leftarrow f_\theta(s)$\lCmt{CLS token, shape $(d,)$}}
+\lLine{\quad\quad $\hat{\mathbf{y}} \leftarrow \mathrm{Clf}(\mathbf{h})$\lCmt{logits, shape $(|\mathcal{T}|,)$}}
+\lLine{\quad\quad $\mathcal{L} \leftarrow \mathrm{BCE}_{\mathrm{weighted}}(\hat{\mathbf{y}},\mathbf{y};\mathbf{w})$}
+\lLine{\quad\quad Update $\theta,\mathrm{Clf}$ via AdamW $+$ cosine LR with warmup}
+\lLine{\quad \textbf{end for}}
+\lLine{\quad Evaluate macro ROC-AUC on soundscape val split; save best checkpoint}
+\lLine{\textbf{end for}}
+\lSkip
+\lLine{\textbf{Label convention:}\; clip primary $= 1.0$,\; secondary $= 0.5$,\;
+       soundscape $= 0.75$ (soft)}
+\end{pseudo}
+
+\bigskip
+
+%% ── Step 3 ───────────────────────────────────────────────────────────────────
+\begin{pseudo}{Step 3 — Factorize-and-Compose Audio-JEPA (planned)}
+\lLine{\textbf{Input:} labeled soundscape windows $\mathcal{W}$, curated clips $\mathcal{C}$, pretrained $f_\theta$}
+\lLine{\textbf{Output:} fine-tuned $f_\theta$;\; P1, P2, Clf;\; EMA target encoder $f_{\bar\theta}$}
+\lSkip
+\lLine{Initialise $f_{\bar\theta}\leftarrow f_\theta$\quad\textit{(EMA copy, never updated by gradients)}}
+\lLine{Initialise P1 (slot attention, $K=8$ slots),\; P2 (compose MLP),\; Clf (linear)}
+\lLine{\textbf{for} each training step \textbf{do}}
+\lLine{\quad Sample labeled window $w\sim\mathcal{W}$ with $Y(w)=\{y_1,\ldots,y_N\}$}
+\lSkip
+\lSec{cP1}{Context path — gradients flow through $f_\theta$, P1, P2, Clf}
+\lLine{\quad $\mathbf{h}\leftarrow f_\theta\!\left(\mathrm{LogMel}(w)\right)$\lCmt{patch token sequence}}
+\lLine{\quad $\{s_k\}_{k=1}^K,\;\{a_k\}_{k=1}^K\leftarrow\mathrm{P1}(\mathbf{h})$\lCmt{factorised slots + attention weights}}
+\lLine{\quad $\hat{z}_{\mathrm{comp}}\leftarrow\norm{\mathrm{P2}\!\left(\{s_k\}\right)}$\lCmt{predicted composed latent}}
+\lLine{\quad $\hat{\mathbf{y}}\leftarrow\mathrm{Clf}\!\left(\{s_k\}\right)$\lCmt{species logits from all $K$ slots}}
+\lSkip
+\lSec{cEt}{Target path — stop-gradient, EMA encoder}
+\lLine{\quad \textbf{for} each species $y_i\in Y(w)$ \textbf{do}}
+\lLine{\quad\quad $x_i\sim\mathcal{C}[y_i]$\lCmt{random curated clip for species $y_i$}}
+\lLine{\quad\quad $z_i\leftarrow\stopgrad{f_{\bar\theta}\!\left(\mathrm{LogMel}(x_i)\right)}$\lCmt{target latent, no gradient}}
+\lLine{\quad \textbf{end for}}
+\lLine{\quad $z_{\mathrm{comp}}\leftarrow\norm{\sum_{i}z_i}$\lCmt{latent composition --- NOT audio mixing}}
+\lSkip
+\lSec{cCl}{Loss computation}
+\lLine{\quad $\mathcal{L}_{\mathrm{cls}}\leftarrow\mathrm{BCE}(\hat{\mathbf{y}},\mathbf{y})$\lCmt{supervised species classification}}
+\lLine{\quad $\pi^*\leftarrow\arg\min_{\pi}\sum_{i}\bigl(1-\cos(s_{\pi(i)},z_i)\bigr)$\lCmt{Hungarian assignment}}
+\lLine{\quad $\mathcal{L}_{\mathrm{fact}}\leftarrow\tfrac{1}{N}\sum_{i=1}^{N}\bigl(1-\cos(s_{\pi^*(i)},z_i)\bigr)$\lCmt{factorisation loss}}
+\lLine{\quad $\mathcal{L}_{\mathrm{comp}}\leftarrow 1-\cos(\hat{z}_{\mathrm{comp}},z_{\mathrm{comp}})$\lCmt{composition consistency loss}}
+\lLine{\quad $\mathcal{L}\leftarrow\mathcal{L}_{\mathrm{cls}}+\lambda_1\mathcal{L}_{\mathrm{fact}}+\lambda_2\mathcal{L}_{\mathrm{comp}}$}
+\lSkip
+\lSec{cEt}{Parameter updates}
+\lLine{\quad Update $\theta,\mathrm{P1},\mathrm{P2},\mathrm{Clf}$ via AdamW (context path gradients only)}
+\lLine{\quad $\bar\theta\leftarrow\tau\,\bar\theta+(1-\tau)\,\theta$\lCmt{EMA update of target encoder}}
+\lLine{\textbf{end for}}
+\lSkip
+\lLine{\textbf{Unmatched slots} ($K>N$): extra slots receive no factorisation target;}
+\lLine{\quad they learn background/silence representations through the composition path.}
+\lLine{\textbf{Recommended:} $K=8$,\; $\tau=0.996$,\; $\lambda_1=\lambda_2=0.5$.}
+\end{pseudo}
+
+\bigskip
+
+\noindent\textbf{Training order.}
+
+\medskip
+\begin{tabular}{lll}
+\toprule
+Step & Objective & Data \\
+\midrule
+1 & Supervised BCE baseline & Curated clips + labeled soundscape windows \\
+2 & JEPA pretraining (masked latent prediction) & All soundscape windows (unlabeled ok) \\
+3 & Factorize-and-Compose fine-tune & Labeled soundscape windows + clips \\
+4 & Pseudo-label + prototype expansion & High-confidence unlabeled windows \\
+5 & Threshold calibration & Val soundscape windows per species \\
+\bottomrule
+\end{tabular}
+
+\end{document}

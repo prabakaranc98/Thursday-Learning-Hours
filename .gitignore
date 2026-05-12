@@ -211,8 +211,11 @@ __marimo__/
 
 # Local experiment artifacts
 data/
-artifacts/
 runs/
+
+# Compiled diagram artifacts (reproducible from tikz/ sources)
+TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026/artifacts/pdf/
+TLH-1-JEPA-SSL-Audio-Acoustics-BirdCLEF2026/artifacts/png/
 checkpoints/
 *.ckpt
 *.pt

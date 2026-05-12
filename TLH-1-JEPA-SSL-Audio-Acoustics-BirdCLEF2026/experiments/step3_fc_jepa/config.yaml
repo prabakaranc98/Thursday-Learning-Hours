@@ -1,0 +1,45 @@
+# Step 3: Factorize-and-Compose Audio-JEPA — hyperparameters
+# All settings are overridden at runtime for A100 (batch/workers)
+
+audio:
+  sample_rate: 32000
+  n_mels: 128
+  n_fft: 1024
+  hop_length: 320
+  duration: 5.0
+
+model:
+  d_model: 256
+  n_heads: 4
+  n_layers: 4
+  patch_size: 16
+  dropout: 0.1
+  n_slots: 8          # K — number of slot attention heads in P1
+  n_slot_iter: 3      # Locatello et al. iterations per forward pass
+  ema_tau: 0.996      # target encoder EMA decay
+
+training:
+  epochs: 30
+  batch_size: 64      # overridden to 256 on A100
+  lr: 3.0e-4
+  weight_decay: 0.05
+  warmup_epochs: 3
+  log_every: 1
+
+losses:
+  lambda_fact: 0.5    # L_fact: Hungarian-matched MSE (slots vs target latents)
+  lambda_comp: 0.5    # L_comp: Mode 2 composition consistency
+  lambda_div: 0.1     # L_div:  slot diversity (off-diagonal cosine penalty)
+  lambda_var: 0.25    # L_var:  VICReg variance (collapse prevention)
+
+mode2:
+  mix_every: 3        # trigger synthetic mix every N steps (0 = disable)
+  mix_batch_size: 64  # overridden to 128 on A100
+
+data:
+  data_root: /kaggle/input/birdclef-2026
+  num_workers: 4
+  val_fraction: 0.15
+  seed: 42
+  secondary_weight: 0.5
+  min_rating: 0.0

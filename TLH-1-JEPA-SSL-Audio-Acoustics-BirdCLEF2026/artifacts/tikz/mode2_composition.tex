@@ -1,206 +1,301 @@
-\documentclass[tikz, border=8pt]{standalone}
+\documentclass[tikz, border=14pt]{standalone}
 \usepackage{tikz}
-\usetikzlibrary{positioning, arrows.meta, fit, backgrounds, calc}
 \usepackage{amsmath}
+\usetikzlibrary{arrows.meta, shapes.geometric, positioning, calc, fit, backgrounds}
 
-%% Mode 3: Natural Labeled Soundscape Training (primary JEPA training mode)
-%%
-%% LEFT  — Soundscape window through context encoder → classification + slots
-%% RIGHT — Species clips (fetched by soundscape labels) through target encoder
-%%         → compose in LATENT SPACE → JEPA factor & composition targets
-%%
-%% The composition happens entirely in latent space — no audio mixing.
-
-\definecolor{cIn} {RGB}{186,230,253}
-\definecolor{cEc} {RGB}{ 30, 64,175}
-\definecolor{cEt} {RGB}{ 71, 85, 99}
-\definecolor{cP1} {RGB}{194, 65, 12}
-\definecolor{cP2} {RGB}{109, 40,217}
-\definecolor{cCl} {RGB}{ 22,101, 52}
-\definecolor{cSl} {RGB}{254,215,170}
-\definecolor{cLo} {RGB}{185, 28, 28}
-\definecolor{cPL} {RGB}{229,240,253}
-\definecolor{cPR} {RGB}{240,242,229}
+%% ── Color palette ──────────────────────────────────────────────────────────
+\definecolor{cA}  {RGB}{ 74,144,226}   % blue   — species A
+\definecolor{cB}  {RGB}{174, 36,206}   % violet — species B
+\definecolor{cC}  {RGB}{230,158, 28}   % amber  — species C
+\definecolor{cVis}{RGB}{150,178,205}   % visible patch
+\definecolor{cMsk}{RGB}{210,212,218}   % masked patch
+\definecolor{cBlk}{RGB}{178,182,190}   % encoder pill
+\definecolor{cP1} {RGB}{194, 65, 12}   % rust   — P1 slot attn
+\definecolor{cP2} {RGB}{100, 40,200}   % violet — P2 compose
+\definecolor{cClf}{RGB}{ 34,139, 34}   % green  — classifier
 
 \begin{document}
 \begin{tikzpicture}[
-  blk/.style={
-    rectangle, rounded corners=2pt,
-    draw=black!38, line width=0.42pt,
-    align=center, minimum height=0.52cm, minimum width=1.42cm,
-    inner sep=2.5pt, font=\fontsize{6.5}{8}\selectfont\sffamily
+  font=\small,
+  >=Stealth,
+  %% tall rounded-rect encoder pill
+  enc/.style={
+    rectangle, rounded corners=6pt,
+    fill=cBlk, draw=gray!60, line width=0.5pt,
+    minimum width=0.55cm, minimum height=2.20cm,
+    inner sep=2pt
   },
+  %% slot row square (2×1 look via width/height)
   slt/.style={
     rectangle, rounded corners=2pt,
-    draw=cP1!50, line width=0.42pt, fill=cSl,
-    minimum height=0.42cm, minimum width=0.88cm,
-    inner sep=2pt, font=\fontsize{6}{7}\selectfont\sffamily, align=center
+    fill=#1, draw=#1!70!black, line width=0.5pt,
+    minimum width=0.52cm, minimum height=0.32cm,
+    inner sep=1pt
   },
-  fw/.style={
-    -{Stealth[length=3.5pt,width=2.2pt]}, line width=0.48pt, black!60
+  normblk/.style={
+    rectangle, rounded corners=4pt,
+    fill=gray!18, draw=gray!55, line width=0.5pt,
+    minimum width=0.68cm, minimum height=0.88cm,
+    inner sep=2pt
   },
-  fwg/.style={
-    -{Stealth[length=3pt,width=2pt]}, line width=0.42pt, black!38
+  clfblk/.style={
+    rectangle, rounded corners=3pt,
+    fill=cClf!15, draw=cClf, line width=0.6pt,
+    minimum width=0.65cm, minimum height=0.48cm,
+    inner sep=2pt
   },
-  lcon/.style={
-    -{Stealth[length=2.8pt,width=1.8pt]}, line width=0.4pt, dotted, cLo!72
+  p1blk/.style={
+    rectangle, rounded corners=3pt,
+    fill=cP1!12, draw=cP1, line width=0.7pt,
+    minimum width=0.76cm, minimum height=1.20cm,
+    inner sep=2pt
   },
-  ann/.style={
-    font=\fontsize{5.5}{6.5}\selectfont\sffamily, text=black!55, align=center
+  p2blk/.style={
+    rectangle, rounded corners=3pt,
+    fill=cP2!12, draw=cP2, line width=0.7pt,
+    minimum width=0.65cm, minimum height=0.90cm,
+    inner sep=2pt
   },
-  loss/.style={
-    font=\fontsize{6}{7.2}\selectfont\itshape\sffamily, text=cLo, align=center
-  },
-  hdr/.style={
-    font=\fontsize{5.5}{6.5}\selectfont\bfseries\sffamily, align=center
+  annobox/.style={
+    rectangle, rounded corners=3pt,
+    fill=gray!8, draw=gray!38, line width=0.5pt,
+    inner sep=5pt
   },
 ]
 
-%% ── Background panels ────────────────────────────────────────────────────────
-\begin{scope}[on background layer]
-  \fill[cPL!50, rounded corners=4pt] (-0.95, 0.55) rectangle ( 8.90,-9.90);
-  \fill[cPR!50, rounded corners=4pt] ( 9.05, 0.55) rectangle (15.30,-9.90);
-\end{scope}
+%% ── patch geometry constants (cm) ──────────────────────────────────────────
+\def\ps{0.25}   % patch square side
+\def\pd{0.30}   % patch pitch
 
-%% ────────────────────────────────────────────────────────────────────────────
-%% LEFT PANEL — Context path: real soundscape through E_c → P1 → Clf
-%% ────────────────────────────────────────────────────────────────────────────
-\node[blk, fill=cIn] (sc) at (0.0, 0.0)
-  {soundscape\\window $w$};
-\node[blk, fill=cEc, text=white] (ec)  at (2.3, 0.0) {$\mathbf{E}_c$};
-\node[blk, fill=cP1, text=white] (p1)  at (4.5, 0.0) {\textbf{P1}\\slot attn.};
+%% ═══════════════════════════════════════════════════════════════════════════
+%% Mode annotation box (top)
+%% ═══════════════════════════════════════════════════════════════════════════
+\node[annobox, font=\footnotesize\bfseries] at (4.40, 5.80)
+  {Mode 3: Natural Labeled Soundscape Training};
 
-\draw[fw] (sc) -- (ec) node[midway, above=1pt, ann] {patches};
-\draw[fw] (ec) -- (p1) node[midway, above=1pt, ann] {tokens};
+%% ═══════════════════════════════════════════════════════════════════════════
+%% TOP ROW — context path    y-centre = 3.60
+%% ═══════════════════════════════════════════════════════════════════════════
+\def\Ty{3.60}
 
-%% Slot box
-\node[slt] (s1)   at (3.55, -1.55) {$s_1,a_1$};
-\node[slt] (sdot) at (4.60, -1.55) {$\cdots$};
-\node[slt] (sk)   at (5.65, -1.55) {$s_K,\!a_K$};
+%% ── mel spectrogram patch grid  5 cols × 4 rows ──────────────────────────
+%% cols 1-2 → cVis, cols 3-5 → cMsk
+\def\Gox{-0.42}   % left edge of grid
+\def\Goy{2.52}    % bottom edge of grid
+\foreach \col in {1,...,5}{
+  \foreach \row in {1,...,4}{
+    \pgfmathparse{int(\col<=2 ? 1 : 0)}
+    \ifnum\pgfmathresult=1 \def\pcol{cVis} \else \def\pcol{cMsk} \fi
+    \fill[\pcol, draw=white, line width=0.3pt]
+      ({\Gox+(\col-1)*\pd},{\Goy+(\row-1)*\pd}) rectangle ++(\ps,\ps);
+  }
+}
+\node[font=\scriptsize, align=center] at ({\Gox+2*\pd+\ps/2},{\Goy-0.26})
+  {soundscape window};
 
-\begin{scope}[on background layer]
-  \node[
-    draw=cP1!42, line width=0.42pt, dashed, rounded corners=3pt,
-    fill=cSl!18, inner sep=3.5pt,
-    fit=(s1)(sk),
-    label={[ann, yshift=-1pt]above:$K$ slots \textit{(set)}}
-  ] (slotbox) {};
-\end{scope}
-\draw[fw] (p1.south) -- (slotbox.north);
+%% ── context encoder f_θ ──────────────────────────────────────────────────
+\node[enc] (fth) at (2.10,\Ty) {};
+\node[font=\scriptsize, rotate=90] at (2.10,\Ty) {$f_\theta$};
 
-%% Classifier (primary supervised loss)
-\node[blk, fill=cCl, text=white] (clf) at (7.5, -1.55) {\textbf{Clf}\\multi-label};
-\draw[fw] (slotbox.east) -- (clf.west);
-\node[loss] (lcls) at (7.5, -2.85)
-  {$\hat{y} \!\to\! \mathcal{L}_{\mathrm{cls}}$\;(BCE)};
-\draw[fw] (clf) -- (lcls);
+%% spectrogram → encoder
+\draw[->, gray!70, line width=0.5pt]
+  ({\Gox+5*\pd},{\Goy+1.5*\pd}) -- (1.83,\Ty);
 
-%% P2 compose (auxiliary JEPA path)
-\node[blk, fill=cP2, text=white] (p2) at (4.5, -4.70) {\textbf{P2}\\compose};
-\draw[fw] (slotbox.south) -- (p2.north);
+%% ── token grid  3 cols × 4 rows ──────────────────────────────────────────
+\def\Tox{2.90}
+\def\Toy{2.52}
+\foreach \col in {1,...,3}{
+  \foreach \row in {1,...,4}{
+    \pgfmathparse{int(\col<=2 ? 1 : 0)}
+    \ifnum\pgfmathresult=1 \def\pcol{cVis} \else \def\pcol{cMsk} \fi
+    \fill[\pcol, draw=white, line width=0.3pt]
+      ({\Tox+(\col-1)*\pd},{\Toy+(\row-1)*\pd}) rectangle ++(\ps,\ps);
+  }
+}
+%% encoder → token grid
+\draw[->, gray!70, line width=0.5pt]
+  (2.38,\Ty) -- ({\Tox-0.06},\Ty);
 
-\node[loss] (zhat)  at (4.5, -5.95) {$\hat{z}_{\mathrm{mix}}$};
-\node[loss] (lcomp) at (4.5, -7.05)
-  {$\mathcal{L}_{\mathrm{comp}}$\\vs $z_{\mathrm{comp}}$};
-\draw[fw] (p2) -- (zhat);
-\draw[fw] (zhat) -- (lcomp);
+%% ── P1 slot attention block ──────────────────────────────────────────────
+\node[p1blk] (P1) at (4.72,\Ty) {};
+\node[font=\tiny, cP1] at (4.72,\Ty) {\textbf{P1}};
+\node[font=\tiny, align=center] at (4.72,{\Ty+0.85}) {predictor};
 
-%% Hungarian match
-\node[blk, fill=cP1!72, text=white, minimum width=1.4cm]
-  (hung) at (1.5, -4.70) {\textbf{Hung.}\\match};
-\draw[fw] (slotbox.south west) -- (hung.north);
+%% token grid → P1
+\draw[->, gray!70, line width=0.5pt]
+  ({\Tox+3*\pd+0.06},\Ty) -- (4.34,\Ty);
 
-\node[loss] (lfact) at (1.5, -6.50)
-  {$\mathcal{L}_{\mathrm{fact}}$\\vs $\{z_i\}$};
-\draw[fw] (hung) -- (lfact);
+%% ── slot rows  A / B / C stacked at x=5.58 ──────────────────────────────
+\def\Sx{5.58}
+\node[slt=cA] (slotA) at (\Sx,{\Ty+0.42}) {};
+\node[slt=cB] (slotB) at (\Sx,\Ty)        {};
+\node[slt=cC] (slotC) at (\Sx,{\Ty-0.42}) {};
+\node[font=\tiny, white] at (\Sx,{\Ty+0.42}) {A};
+\node[font=\tiny, white] at (\Sx,\Ty)         {B};
+\node[font=\tiny, white] at (\Sx,{\Ty-0.42}) {C};
 
-\node[hdr, text=cEc!85] at (4.0, 0.42) {Context path (E\textsubscript{c})};
+%% P1 fan-out arrows → slots
+\draw[->, cP1!60, line width=0.5pt]
+  (5.10,{\Ty+0.22}) -- ({\Sx-0.26},{\Ty+0.42});
+\draw[->, cP1!60, line width=0.5pt]
+  (5.10,\Ty)         -- ({\Sx-0.26},\Ty);
+\draw[->, cP1!60, line width=0.5pt]
+  (5.10,{\Ty-0.22}) -- ({\Sx-0.26},{\Ty-0.42});
 
-%% ────────────────────────────────────────────────────────────────────────────
-%% VERTICAL SEPARATOR
-%% ────────────────────────────────────────────────────────────────────────────
-\draw[black!18, dashed, line width=0.45pt] (9.0, 0.50) -- (9.0,-9.80);
+%% ── P2 compose block ─────────────────────────────────────────────────────
+\node[p2blk] (P2) at (6.72,\Ty) {};
+\node[font=\tiny, cP2] at (6.72,\Ty) {\textbf{P2}};
 
-%% ────────────────────────────────────────────────────────────────────────────
-%% RIGHT PANEL — Target path: species clips → E_t → latent composition
-%%               clips are selected from train_audio/ using soundscape labels
-%% ────────────────────────────────────────────────────────────────────────────
+%% slot group → P2
+\draw[->, gray!60, line width=0.5pt]
+  ({\Sx+0.26},\Ty) -- (6.39,\Ty);
 
-%% Soundscape label box (shared knowledge from labels)
-\node[blk, fill=cIn, minimum width=2.4cm] (lbl) at (11.4, 0.0)
-  {labels$(\,w\,)=\{A,B,\ldots\}$};
+%% ── z_hat 3-patch strip at x=7.38 ───────────────────────────────────────
+\def\ZHx{7.38}
+\pgfmathsetmacro{\ZHy}{\Ty-0.125}   % vertical bottom of strip
+\fill[cA, draw=white, line width=0.3pt] (\ZHx,      \ZHy) rectangle ++(\ps,\ps);
+\fill[cB, draw=white, line width=0.3pt] ({\ZHx+\pd},\ZHy) rectangle ++(\ps,\ps);
+\fill[cC, draw=white, line width=0.3pt] ({\ZHx+2*\pd},\ZHy) rectangle ++(\ps,\ps);
+\node[font=\tiny] at ({\ZHx+\pd},{\ZHy+\ps+0.14}) {$\hat{z}$};
 
-\node[ann, text=cP1!60, font=\fontsize{5}{6}\selectfont\sffamily]
-  at (11.4, -0.60)
-  {from \texttt{train\_soundscapes\_labels.csv}};
+%% P2 → z_hat
+\draw[->, gray!60, line width=0.5pt]
+  (7.05,\Ty) -- (\ZHx,\Ty);
 
-%% Sample clips from train_audio/
-\node[blk, fill=cIn] (xa)  at (10.0, -1.90) {clip $x_A$};
-\node[blk, fill=cIn] (xb)  at (10.0, -3.10) {clip $x_B$};
-\node[blk, fill=cIn] (xdot)at (10.0, -4.30) {$\vdots$};
+%% ── Clf block (green, top-right area) ────────────────────────────────────
+\node[clfblk] (Clf) at (8.00,4.88) {};
+\node[font=\tiny, cClf!80!black] at (8.00,4.88) {\textbf{Clf}};
+\node[font=\tiny, cClf!80!black, right] at (8.34,4.88)
+  {$\mathcal{L}_{\mathrm{cls}}$ (BCE)};
 
-\draw[fwg] (lbl.south west) to[out=250, in=80]  (xa.north);
-\draw[fwg] (lbl.south west) to[out=260, in=80]  (xb.north);
-\draw[fwg] (lbl.south west) to[out=265, in=80]  (xdot.north);
+%% slot group upper edge → Clf
+\draw[->, cClf!65, line width=0.5pt]
+  (\Sx,{\Ty+0.42+0.16})
+  .. controls (\Sx+0.35,{\Ty+1.10}) ..
+  (7.68,4.88);
 
-\node[ann, text=black!40, font=\fontsize{5}{6}\selectfont\itshape\sffamily]
-  at (10.0,-5.00) {random clip\\from \texttt{train\_audio/}};
+%% ═══════════════════════════════════════════════════════════════════════════
+%% BOTTOM ROW — target path    y-centre = 0.60
+%% ═══════════════════════════════════════════════════════════════════════════
+\def\By{0.60}
 
-%% E_t encodes each clip
-\node[blk, fill=cEt, text=white] (eta) at (12.2, -1.90) {$\mathbf{E}_t$};
-\node[blk, fill=cEt, text=white] (etb) at (12.2, -3.10) {$\mathbf{E}_t$};
-\node[blk, fill=cEt, text=white] (etd) at (12.2, -4.30) {$\mathbf{E}_t$};
+%% ── species clip thumbnails (colored-border rectangles stacked) ───────────
+\def\Cx{-0.05}
+\fill[cA!25, draw=cA, line width=0.8pt]
+  (\Cx,{\By+0.54}) rectangle ++(0.52,0.36);
+\node[font=\tiny, cA!90!black] at ({\Cx+0.26},{\By+0.72}) {A};
 
-\node[ann, text=black!38, font=\fontsize{5}{6}\selectfont\itshape\sffamily]
-  at (12.2, -5.00) {shared EMA};
+\fill[cB!25, draw=cB, line width=0.8pt]
+  (\Cx,{\By+0.10}) rectangle ++(0.52,0.36);
+\node[font=\tiny, cB!90!black] at ({\Cx+0.26},{\By+0.28}) {B};
 
-\draw[fw] (xa)   -- (eta);
-\draw[fw] (xb)   -- (etb);
-\draw[fwg](xdot) -- (etd);
+\fill[cC!25, draw=cC, line width=0.8pt]
+  (\Cx,{\By-0.34}) rectangle ++(0.52,0.36);
+\node[font=\tiny, cC!90!black] at ({\Cx+0.26},{\By-0.16}) {C};
 
-%% Latent vectors
-\node[blk, fill=cSl, minimum width=1.0cm] (za)  at (14.0, -1.90) {$z_A$};
-\node[blk, fill=cSl, minimum width=1.0cm] (zb)  at (14.0, -3.10) {$z_B$};
-\node[blk, fill=cSl, minimum width=1.0cm] (zdot)at (14.0, -4.30) {$\vdots$};
+\node[font=\tiny, gray!70, align=center, text width=1.80cm]
+  at ({\Cx+0.26},{\By-0.74})
+  {sampled from\\train\_audio/\\using labels(w)};
 
-\draw[fw] (eta) -- (za);
-\draw[fw] (etb) -- (zb);
-\draw[fw] (etd) -- (zdot);
+%% ── target encoder f_θ̄ ──────────────────────────────────────────────────
+\node[enc] (ftbar) at (2.10,\By) {};
+\node[font=\scriptsize, rotate=90] at (2.10,\By) {$f_{\bar\theta}$};
 
-%% z_comp — composition in LATENT SPACE
-\node[blk, fill=cSl, minimum width=2.3cm] (zcp) at (11.8, -7.10)
-  {$z_{\mathrm{comp}} = \mathrm{norm}\!\bigl(\textstyle\sum_i z_i\bigr)$};
+%% clips → target encoder
+\draw[->, gray!70, line width=0.5pt]
+  ({\Cx+0.54},\By) -- (1.83,\By);
 
-\draw[fw] (za.south)   to[out=270, in=70]  (zcp.north east);
-\draw[fw] (zb.south)   to[out=270, in=80]  (zcp.east);
-\draw[fw] (zdot.south) to[out=270, in=90]  (zcp.east);
+%% ── EMA dashed arc:  f_θ → f_θ̄ ─────────────────────────────────────────
+\draw[->, dashed, gray!55, line width=0.6pt]
+  (2.38,{\Ty-1.10})
+  .. controls (3.30,2.10) ..
+  (2.38,{\By+1.10});
+\node[font=\tiny, gray!65] at (3.08,2.10) {EMA};
 
-\node[ann, text=cEt!80, font=\fontsize{5.5}{6.5}\selectfont\bfseries\sffamily]
-  at (14.0, -6.30) {latent composition\\(no audio mixing)};
+%% ── z_A / z_B / z_C blocks stacked at x=3.15 ───────────────────────────
+\def\Zox{3.12}
+%% z_A (top)
+\fill[cA, draw=cA!80!black, line width=0.4pt]
+  (\Zox,{\By+0.50}) rectangle ++(0.52,0.36);
+\node[font=\tiny, left] at ({\Zox-0.06},{\By+0.68}) {$z_A$};
+%% z_B (mid)
+\fill[cB, draw=cB!80!black, line width=0.4pt]
+  (\Zox,{\By+0.06}) rectangle ++(0.52,0.36);
+\node[font=\tiny, left] at ({\Zox-0.06},{\By+0.24}) {$z_B$};
+%% z_C (bot)
+\fill[cC, draw=cC!80!black, line width=0.4pt]
+  (\Zox,{\By-0.38}) rectangle ++(0.52,0.36);
+\node[font=\tiny, left] at ({\Zox-0.06},{\By-0.20}) {$z_C$};
 
-\node[hdr, text=cEt!85] at (12.0, 0.42) {Target path (E\textsubscript{t})};
+%% target encoder → z stacks
+\draw[->, gray!70, line width=0.5pt]
+  (2.38,\By) -- ({\Zox-0.06},\By);
 
-%% ── Cross-path loss connections ───────────────────────────────────────────────
-%% latents {z_i} → L_factored (Hungarian)
-\draw[lcon] (za.west)  to[out=180, in=35, looseness=0.4] (lfact.north east);
-\draw[lcon] (zb.west)  to[out=180, in=20, looseness=0.3] (lfact.east);
-%% z_comp → L_comp
-\draw[lcon] (zcp.west) to[out=180, in=10, looseness=0.35] (lcomp.east);
+%% ── ∑-norm block at x=5.02 ──────────────────────────────────────────────
+\node[normblk] (Norm) at (5.02,\By) {};
+\node[font=\scriptsize] at (5.02,\By) {$\textstyle\sum$norm};
 
-%% ────────────────────────────────────────────────────────────────────────────
-%% LATENT SPACE NOTE
-%% ────────────────────────────────────────────────────────────────────────────
-\node[
-  rectangle, rounded corners=2.5pt,
-  draw=cEt!38, line width=0.42pt, fill=cEt!5,
-  inner sep=4.5pt,
-  font=\fontsize{5.5}{7}\selectfont\sffamily, align=left, text=black!65
-] at (11.4, -8.90)
-{
-  $z_i = \mathbf{E}_t(\mathrm{clip}_i)$\quad no gradient\\
-  $z_{\mathrm{comp}}$ lives in the same unit sphere as $z_i$\\
-  composition is \textit{linear} in latent space, not audio
-};
+%% z stacks → norm block
+\draw[->, gray!60, line width=0.5pt]
+  ({\Zox+0.54},\By) -- (4.68,\By);
+
+%% ── z_comp 3-patch strip at x=7.38 (same x as z_hat) ───────────────────
+\def\ZCx{7.38}
+\pgfmathsetmacro{\ZCy}{\By-0.125}
+\fill[cA, draw=white, line width=0.3pt] (\ZCx,      \ZCy) rectangle ++(\ps,\ps);
+\fill[cB, draw=white, line width=0.3pt] ({\ZCx+\pd},\ZCy) rectangle ++(\ps,\ps);
+\fill[cC, draw=white, line width=0.3pt] ({\ZCx+2*\pd},\ZCy) rectangle ++(\ps,\ps);
+\node[font=\tiny] at ({\ZCx+\pd},{\ZCy-0.22}) {$z_{\mathrm{comp}}$};
+\node[font=\tiny\itshape, gray!65, align=center]
+  at ({\ZCx+\pd},{\ZCy-0.46})
+  {latent composition --- no audio mixing};
+
+%% norm block → z_comp
+\draw[->, gray!60, line width=0.5pt]
+  (5.36,\By) -- (\ZCx,\By);
+
+%% ═══════════════════════════════════════════════════════════════════════════
+%% LOSSES
+%% ═══════════════════════════════════════════════════════════════════════════
+
+%% ── L_comp: vertical dashed double-headed arrow between z_hat and z_comp ──
+%% Centre x of the 3-patch strip
+\def\Lcx{7.60}
+\pgfmathsetmacro{\Lmid}{(\Ty+\By)/2}
+\draw[<->, dashed, cP2, line width=0.70pt]
+  (\Lcx,{\Ty-0.125})
+  --
+  (\Lcx,{\By+\ps+0.125});
+\node[font=\tiny, cP2, right] at ({\Lcx+0.08},{\Lmid+0.14})
+  {$\mathcal{L}_{\mathrm{comp}}$};
+\node[font=\tiny, cP2!65, right] at ({\Lcx+0.08},{\Lmid-0.14})
+  {same unit sphere};
+
+%% ── L_fact: 3 dashed arcs routed through the gap (y≈1.2–2.5) ────────────
+%% slotA bottom = Ty + 0.42 - 0.16 = 3.86
+%% slotB bottom = Ty        - 0.16 = 3.44
+%% slotC bottom = Ty - 0.42 - 0.16 = 3.02
+%% z_A  top     = By + 0.50 + 0.36 = 1.46
+%% z_B  top     = By + 0.06 + 0.36 = 1.02
+%% z_C  top     = By - 0.38 + 0.36 = 0.58
+
+\draw[->, dashed, cA!75, line width=0.55pt]
+  (\Sx,{3.60+0.42-0.16})
+  .. controls (\Sx,1.90) and ({\Zox+0.26},1.90) ..
+  ({\Zox+0.26},{0.60+0.50+0.36});
+
+\draw[->, dashed, cB!75, line width=0.55pt]
+  (\Sx,{3.60-0.16})
+  .. controls (\Sx,1.55) and ({\Zox+0.26},1.55) ..
+  ({\Zox+0.26},{0.60+0.06+0.36});
+
+\draw[->, dashed, cC!75, line width=0.55pt]
+  (\Sx,{3.60-0.42-0.16})
+  .. controls (\Sx,1.20) and ({\Zox+0.26},1.20) ..
+  ({\Zox+0.26},{0.60-0.38+0.36});
+
+\node[font=\tiny, gray!65, align=center] at (4.50,2.40)
+  {$\mathcal{L}_{\mathrm{fact}}$ (Hung.)};
 
 \end{tikzpicture}
 \end{document}

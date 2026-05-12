@@ -23,7 +23,8 @@ BirdCLEF 2026 data schema
 
 Labels
 ──────
-  Soundscape windows : all semicolon-separated IDs → hard positive (1.0)
+  Soundscape windows : all semicolon-separated IDs → soft positive (0.75)
+                       Label covers the whole 5-s window but the call may be brief.
   Curated clips      : primary_label → 1.0 | secondary_labels → 0.5
 """
 
@@ -32,9 +33,10 @@ import math
 import os
 import sys
 
-# ── CUDA compatibility guard ───────────────────────────────────────────────────
+# ── CUDA compatibility guard + PyTorch reinstall for P100 ─────────────────────
 # Modern PyTorch (≥2.3) dropped support for CUDA capability < 7.0 (e.g. P100).
-# Detect this BEFORE importing torch.cuda to avoid silent fallback crashes.
+# If we detect P100 (cap 6.0) AND internet is available, reinstall torch==2.0.1
+# which still supports sm_60.  Otherwise fall back to CPU smoke-test mode.
 try:
     import subprocess
     _nvsmi = subprocess.run(
@@ -43,10 +45,25 @@ try:
     )
     _caps = [float(c.strip()) for c in _nvsmi.stdout.strip().splitlines() if c.strip()]
     if _caps and all(c < 7.0 for c in _caps):
-        print(f"[GPU] CUDA capability {_caps} < 7.0 — forcing CPU mode")
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""
-except Exception:
-    pass
+        # torch>=2.3 dropped sm_60 (P100). Use 2.2.2 which still supports it.
+        print(f"[GPU] CUDA capability {_caps} — reinstalling torch==2.2.2+cu118 for sm_60")
+        _pip = subprocess.run(
+            [
+                "pip", "install", "-q",
+                "torch==2.2.2+cu118",
+                "torchaudio==2.2.2+cu118",
+                "--extra-index-url", "https://download.pytorch.org/whl/cu118",
+                "numpy<2",          # torch 2.2 was compiled against NumPy 1.x ABI
+            ],
+            capture_output=True, text=True, timeout=300
+        )
+        if _pip.returncode != 0:
+            print(f"[GPU] reinstall failed — forcing CPU mode\n{_pip.stderr[-500:]}")
+            os.environ["CUDA_VISIBLE_DEVICES"] = ""
+        else:
+            print("[GPU] torch==2.2.2+cu118 installed — CUDA sm_60 should work")
+except Exception as _e:
+    print(f"[GPU] guard error ({_e}) — continuing")
 
 import numpy as np
 import pandas as pd
@@ -57,6 +74,25 @@ import torchaudio.transforms as T
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
+
+# ── WandB (optional — gracefully disabled if not configured) ──────────────────
+try:
+    import wandb
+    _wkey = None
+    try:                                            # Kaggle secrets path
+        from kaggle_secrets import UserSecretsClient
+        _wkey = UserSecretsClient().get_secret("WANDB_API_KEY")
+    except Exception:
+        _wkey = os.environ.get("WANDB_API_KEY")    # env-var path (cloud machines)
+    if _wkey:
+        wandb.login(key=_wkey, relogin=True)
+        _USE_WANDB = True
+    else:
+        _USE_WANDB = False
+        print("[WANDB] WANDB_API_KEY not set — logging to stdout only")
+except Exception as _we:
+    _USE_WANDB = False
+    print(f"[WANDB] unavailable ({_we}) — logging to stdout only")
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 CFG = dict(
@@ -73,15 +109,16 @@ CFG = dict(
     patch_size    = 16,
     dropout       = 0.1,
     # Training
-    epochs        = 15,
+    epochs        = 30,
     batch_size    = 64,
     lr            = 1e-3,
     weight_decay  = 0.05,
     warmup_epochs = 2,
+    log_every     = 1,          # WandB step log interval (batches)
     # Data
     data_root        = "/kaggle/input/birdclef-2026",
     num_workers      = 4,
-    val_fraction     = 0.1,
+    val_fraction     = 0.15,    # 10 soundscape files (~220 windows) for val
     seed             = 42,
     secondary_weight = 0.5,    # label weight for secondary (uncertain) labels
     min_rating       = 0.0,    # keep all recordings (set > 0 to filter low quality)
@@ -506,10 +543,12 @@ class SoundscapeDataset(Dataset):
             spec = self.fmask(spec)
             spec = self.tmask(spec)
 
+        # Soundscape labels are weak: annotator marked the 5-second window but the
+        # actual call may only occur briefly within it.  Use 0.75 instead of 1.0.
         lbl = torch.zeros(self.num_classes)
         for sp in row["species_set"]:
             if sp in self.species_to_idx:
-                lbl[self.species_to_idx[sp]] = 1.0
+                lbl[self.species_to_idx[sp]] = 0.75
         return spec, lbl
 
 
@@ -606,7 +645,25 @@ def cosine_lr(epoch: int, total: int, warmup: int, base: float,
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():
-    cfg  = CFG
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_root", default=None,
+                        help="BirdCLEF data root (overrides cfg and BIRDCLEF_DATA_ROOT)")
+    parser.add_argument("--out_dir", default=None,
+                        help="Output directory for checkpoints and submission.csv")
+    args, _ = parser.parse_known_args()
+
+    cfg = dict(CFG)
+
+    # data_root priority: --data_root arg > BIRDCLEF_DATA_ROOT env > cfg default
+    if args.data_root:
+        cfg["data_root"] = args.data_root
+    elif os.environ.get("BIRDCLEF_DATA_ROOT"):
+        cfg["data_root"] = os.environ["BIRDCLEF_DATA_ROOT"]
+
+    out_dir = args.out_dir or os.environ.get("BIRDCLEF_OUT_DIR", "/kaggle/working")
+    os.makedirs(out_dir, exist_ok=True)
+
     root = find_data_root(cfg["data_root"])
 
     print("─" * 60)
@@ -645,10 +702,54 @@ def main():
         min_rating=cfg["min_rating"], **ds_kwargs
     )
 
-    # Training: combine both; Validation: soundscape only (closest to test dist)
+    # Training: combine both sources
+    # Validation: soundscape windows (closest to test dist) + clip val as top-up
+    # if soundscape val is too small (< 200 samples), pad with clip val
     train_ds = ConcatDataset([sc_tr, cl_tr]) if len(sc_tr) > 0 else cl_tr
-    val_ds   = sc_va if len(sc_va) > 0 else cl_va
+    if len(sc_va) >= 200:
+        val_ds = sc_va
+    else:
+        val_ds = ConcatDataset([sc_va, cl_va]) if len(sc_va) > 0 else cl_va
+        print(f"[DATA] val top-up: sc_va={len(sc_va)} too small, adding {len(cl_va)} clip val samples")
     print(f"[DATA]  train={len(train_ds):,}  val={len(val_ds):,}")
+
+    # ── GPU capability → precision + batch size (MUST come before DataLoader) ──
+    n_frames = math.ceil(cfg["duration"] * cfg["sample_rate"] / cfg["hop_length"]) + 1
+    device   = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if device.type == "cuda":
+        _cap = torch.cuda.get_device_capability()
+        _cap_val = _cap[0] + _cap[1] / 10
+        if _cap_val >= 8.0:
+            amp_dtype = torch.bfloat16      # A100 / H100
+        elif _cap_val >= 7.0:
+            amp_dtype = torch.float16       # T4, V100
+        else:
+            amp_dtype = torch.float32       # P100
+        print(f"[MODEL] device={device}  cap=sm_{_cap[0]}{_cap[1]}  "
+              f"amp_dtype={amp_dtype}  spec=({cfg['n_mels']}, {n_frames})")
+    else:
+        _cap_val  = 0.0
+        amp_dtype = torch.float32
+        print(f"[MODEL] device={device}  spec=({cfg['n_mels']}, {n_frames})")
+
+    use_amp = (amp_dtype != torch.float32)
+    scaler  = torch.cuda.amp.GradScaler(enabled=(amp_dtype == torch.float16))
+
+    # Adjust batch / workers based on hardware — before DataLoader creation
+    cfg = dict(cfg)
+    if device.type == "cpu":
+        cfg["epochs"]      = 3
+        cfg["batch_size"]  = 32
+        cfg["num_workers"] = 2
+        print("[TRAIN] CPU mode — epochs=3, batch_size=32 (smoke test)")
+    elif _cap_val >= 8.0:
+        cfg["batch_size"]  = 512
+        cfg["num_workers"] = 12
+        print(f"[TRAIN] A100 mode — batch_size={cfg['batch_size']}, bf16 amp, workers={cfg['num_workers']}")
+
+    steps_per_epoch = math.ceil(len(train_ds) / cfg["batch_size"])
+    print(f"[TRAIN] steps/epoch={steps_per_epoch}  total_steps={steps_per_epoch * cfg['epochs']}")
 
     train_loader = DataLoader(
         train_ds, batch_size=cfg["batch_size"],
@@ -659,18 +760,15 @@ def main():
         shuffle=False, num_workers=cfg["num_workers"], pin_memory=True,
     )
 
-    # Spectrogram time dimension (consistent with model)
-    n_frames = math.ceil(cfg["duration"] * cfg["sample_rate"] / cfg["hop_length"]) + 1
-    device   = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[MODEL] device={device}  spec=({cfg['n_mels']}, {n_frames})")
-
-    # On CPU: reduce to a fast smoke-test (3 epochs, smaller batch)
-    if device.type == "cpu":
-        cfg = dict(cfg)
-        cfg["epochs"]     = 3
-        cfg["batch_size"] = 32
-        cfg["num_workers"] = 2
-        print("[TRAIN] CPU mode — epochs=3, batch_size=32 (smoke test)")
+    # ── WandB run init ────────────────────────────────────────────────────────
+    if _USE_WANDB:
+        wandb.init(
+            project = "fc-audio-jepa",
+            name    = f"step1-baseline-{device.type}",
+            config  = cfg,
+            tags    = ["step1", "supervised", "birdclef2026"],
+        )
+        print("[WANDB] run started")
 
     model = BaselineClassifier(
         n_mels     = cfg["n_mels"],
@@ -697,60 +795,193 @@ def main():
         model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"]
     )
 
-    ckpt_dir = "/kaggle/working/checkpoints"
+    ckpt_dir = os.path.join(out_dir, "checkpoints")
     os.makedirs(ckpt_dir, exist_ok=True)
-    best_auc = 0.0
+    best_auc  = 0.0
+    global_step = 0
+    log_every   = cfg.get("log_every", 50)
 
     for ep in range(cfg["epochs"]):
         lr = cosine_lr(ep, cfg["epochs"], cfg["warmup_epochs"], cfg["lr"])
         for pg in optimizer.param_groups:
             pg["lr"] = lr
 
+        # GPU memory snapshot at epoch start
+        if device.type == "cuda" and _USE_WANDB and ep == 0:
+            mem_alloc = torch.cuda.memory_allocated(device) / 1e9
+            mem_total = torch.cuda.get_device_properties(device).total_memory / 1e9
+            wandb.log({"gpu/mem_allocated_gb": mem_alloc,
+                       "gpu/mem_total_gb": mem_total, "step": global_step})
+
         # ── train ────────────────────────────────────────────────────────────
         model.train()
-        tr_loss, nb = 0.0, 0
+        tr_loss, tr_pos_ratio, nb = 0.0, 0.0, 0
         for specs, lbls in train_loader:
             specs, lbls = specs.to(device), lbls.to(device)
             optimizer.zero_grad()
-            loss = criterion(model(specs), lbls)
-            loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            tr_loss += loss.item()
-            nb      += 1
-        tr_loss /= max(nb, 1)
+            with torch.autocast(device_type=device.type, dtype=amp_dtype,
+                                enabled=use_amp):
+                logits = model(specs)
+                # Step 1 has only L_cls. Step 3 will add L_fact + L_comp here.
+                loss_bce = criterion(logits, lbls)
+                loss     = loss_bce
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            grad_norm = nn.utils.clip_grad_norm_(model.parameters(), 1.0).item()
+            scaler.step(optimizer)
+            scaler.update()
+            # track what fraction of predictions are "positive" (> 0.5 after sigmoid)
+            with torch.no_grad():
+                pos_ratio = (logits.detach().float().sigmoid() > 0.5).float().mean().item()
+            tr_loss      += loss_bce.item()
+            tr_pos_ratio += pos_ratio
+            nb           += 1
+            global_step  += 1
+            if _USE_WANDB and global_step % log_every == 0:
+                wandb.log({
+                    "train/loss_bce":      loss_bce.item(),
+                    "train/grad_norm":     grad_norm,
+                    "train/pos_pred_ratio": pos_ratio,   # collapse → 0, overconf → 1
+                    "train/lr":            lr,
+                    "step":                global_step,
+                })
+        tr_loss      /= max(nb, 1)
+        tr_pos_ratio /= max(nb, 1)
 
         # ── validate ──────────────────────────────────────────────────────────
         model.eval()
         pall, lall = [], []
         with torch.no_grad():
             for specs, lbls in val_loader:
-                pall.append(torch.sigmoid(model(specs.to(device))).cpu().numpy())
-                lall.append(lbls.numpy())
+                with torch.autocast(device_type=device.type, dtype=amp_dtype,
+                                    enabled=use_amp):
+                    pred = torch.sigmoid(model(specs.to(device)))
+                # .float() before .numpy() guards against bf16/fp16 ABI issues
+                pall.append(pred.cpu().float().numpy())
+                lall.append(lbls.float().numpy())
         pall = np.concatenate(pall)
         lall = np.concatenate(lall)
-        # Hard labels for AUC: count primary labels only (> 0.9 threshold)
-        lall_hard = (lall > 0.9).astype(float)
+        # >= 0.5: secondary labels (0.5) count as present, matching Kaggle's metric
+        # (solution_sums = solution.sum(axis=0); scored_columns = sums[sums > 0])
+        lall_hard = (lall >= 0.5).astype(float)
         valid     = lall_hard.sum(0) > 0
         val_auc   = (
             roc_auc_score(lall_hard[:, valid], pall[:, valid], average="macro")
             if valid.sum() > 0 else 0.0
         )
 
+        n_valid_species = int(valid.sum())
+        val_mean_pred   = float(pall.mean())
         print(
             f"Epoch {ep+1:02d}/{cfg['epochs']:02d} | "
-            f"loss {tr_loss:.4f} | val_auc {val_auc:.4f} | lr {lr:.2e}"
+            f"loss_bce {tr_loss:.4f} | pos_ratio {tr_pos_ratio:.3f} | "
+            f"val_auc {val_auc:.4f} | val_species {n_valid_species} | "
+            f"val_mean_pred {val_mean_pred:.3f} | lr {lr:.2e}"
         )
+        if _USE_WANDB:
+            wandb.log({
+                "train/epoch_loss_bce":  tr_loss,
+                "train/pos_pred_ratio":  tr_pos_ratio,
+                "val/auc":               val_auc,
+                "val/species_covered":   n_valid_species,
+                "val/mean_pred":         val_mean_pred,   # calibration: should be ~0.01-0.05
+                "epoch":                 ep + 1,
+            })
 
+        ckpt_payload = {"epoch": ep + 1, "model_state": model.state_dict(),
+                        "val_auc": val_auc, "cfg": cfg, "species": species_list}
+        torch.save(ckpt_payload, f"{ckpt_dir}/last.pt")  # always saved
         if val_auc > best_auc:
             best_auc = val_auc
-            torch.save(
-                {"epoch": ep + 1, "model_state": model.state_dict(),
-                 "val_auc": val_auc, "cfg": cfg, "species": species_list},
-                f"{ckpt_dir}/best.pt",
-            )
+            torch.save(ckpt_payload, f"{ckpt_dir}/best.pt")
 
+    if _USE_WANDB:
+        wandb.summary["best_val_auc"] = best_auc
+        wandb.finish()
     print(f"\nBest val AUC: {best_auc:.4f}  |  ckpt: {ckpt_dir}/best.pt")
+
+    # ── Inference: generate submission.csv ────────────────────────────────────
+    ckpt_path = (f"{ckpt_dir}/best.pt" if os.path.exists(f"{ckpt_dir}/best.pt")
+                 else f"{ckpt_dir}/last.pt")
+    print(f"\n[INFER] Loading checkpoint {os.path.basename(ckpt_path)} for test inference...")
+    ckpt = torch.load(ckpt_path, map_location=device)
+    model.load_state_dict(ckpt["model_state"])
+    run_inference(model, cfg, root, species_list, species_to_idx, device, out_dir)
+
+
+# ── INFERENCE ─────────────────────────────────────────────────────────────────
+
+def run_inference(model, cfg, data_root, species_list, species_to_idx, device, out_dir="/kaggle/working"):
+    """Slide over test soundscapes and write /kaggle/working/submission.csv."""
+    import glob
+
+    model.eval()
+    sr        = cfg["sample_rate"]
+    n_samples = int(sr * cfg["duration"])
+    win_sec   = int(cfg["duration"])
+
+    mel_tf = T.MelSpectrogram(
+        sample_rate=sr, n_mels=cfg["n_mels"],
+        n_fft=cfg["n_fft"], hop_length=cfg["hop_length"],
+    )
+    db_tf = T.AmplitudeToDB(top_db=80)
+
+    # Read sample_submission to get exact row_ids and species column order
+    sub_tmpl = pd.read_csv(os.path.join(data_root, "sample_submission.csv"))
+    species_cols = [c for c in sub_tmpl.columns if c != "row_id"]
+    print(f"[INFER] template: {len(sub_tmpl)} rows, {len(species_cols)} species cols")
+    print(f"[INFER] sample row_ids: {list(sub_tmpl['row_id'][:3])}")
+
+    # col → index into model output vector (-1 if unknown)
+    col_idx = {col: species_to_idx.get(col, -1) for col in species_cols}
+
+    # Run model over each test soundscape
+    preds = {}   # row_id → np.float32 array (n_species,)
+    test_dir = os.path.join(data_root, "test_soundscapes")
+    files = sorted(glob.glob(os.path.join(test_dir, "*.ogg")))
+    print(f"[INFER] {len(files)} test soundscape files")
+
+    with torch.no_grad():
+        for fpath in files:
+            stem = os.path.splitext(os.path.basename(fpath))[0]
+            wav, file_sr = torchaudio.load(fpath)
+            if file_sr != sr:
+                wav = T.Resample(file_sr, sr)(wav)
+            if wav.shape[0] > 1:
+                wav = wav.mean(0, keepdim=True)
+
+            start   = 0
+            end_sec = win_sec
+            while start < wav.shape[1]:
+                chunk = wav[:, start : start + n_samples]
+                if chunk.shape[1] < n_samples:
+                    chunk = F.pad(chunk, (0, n_samples - chunk.shape[1]))
+
+                spec = db_tf(mel_tf(chunk)).unsqueeze(0).to(device)
+                mean = spec.mean()
+                std  = spec.std().clamp(min=1e-6)
+                spec = ((spec - mean) / std).clamp(-4.0, 4.0)
+
+                probs = torch.sigmoid(model(spec)).squeeze(0).cpu().numpy()
+                preds[f"{stem}_{end_sec}"] = probs
+
+                start   += n_samples
+                end_sec += win_sec
+
+    # Align to sample_submission row order
+    rows = []
+    for rid in sub_tmpl["row_id"]:
+        p   = preds.get(rid, np.zeros(len(species_list), dtype=np.float32))
+        row = {"row_id": rid}
+        for col in species_cols:
+            idx      = col_idx[col]
+            row[col] = float(p[idx]) if idx >= 0 else 0.0
+        rows.append(row)
+
+    sub_df   = pd.DataFrame(rows)
+    out_path = os.path.join(out_dir, "submission.csv")
+    sub_df.to_csv(out_path, index=False)
+    print(f"[INFER] submission.csv saved → {out_path}  ({len(sub_df)} rows × {len(species_cols)} cols)")
 
 
 if __name__ == "__main__":

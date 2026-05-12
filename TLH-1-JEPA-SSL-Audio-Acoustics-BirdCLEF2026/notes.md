@@ -148,6 +148,108 @@ z_comp = norm(z_A + z_B + z_bg) from E_t of individual clips
 Step 1 baseline uses Mode 3 without the JEPA part: just BCE on both datasets.
 Pairing soundscape windows with their species clips is needed for Step 3+.
 
+## K Factors: Design Decision
+
+K (number of slots) is a fixed hyperparameter — NOT variational, NOT equal to N or 234.
+
+K should be slightly larger than the typical number of species per soundscape window.
+BirdCLEF 2026 soundscape windows typically have 3–8 labeled species → K=8 or K=12.
+
+Why K ≠ 234:
+- Hungarian matching over 234×234 is expensive
+- Most slots empty per window → sparse gradients
+- Would become a species-indexed prototype bank, not a learned factorizer
+
+Why K ≠ N (variable):
+- Hungarian matching handles K > N: extra slots learn background/noise/silence
+- Simpler implementation — no variable-length batching
+
+The classifier reads all K slots and maps to 234 species via a linear head.
+K=8 "capacity" is enough for a 234-class output head.
+
+Ablation plan: K = 4, 8, 12, 16 after initial runs at K=8.
+
+## Patch Sparsity: Handling Windows Without Clear Acoustic Events
+
+This is the core challenge acoustic JEPA must solve. A 5-second soundscape window
+sliced into 16×16 patches (on a 128×501 log-mel) gives ~192 patches. In a typical
+window, only 5–15 patches will contain a bird call; the rest are background noise,
+silence, or environmental texture.
+
+Two distinct sparsity problems:
+
+**1. Window-level sparsity** — many 5-second windows contain no labeled species at all.
+   Even windows with a label may have the call only in 1–2 seconds of it.
+
+**2. Patch-level sparsity** — within an active window, the signal patches are a
+   small minority. A naive masked autoencoder trained on random mask patterns
+   spends most of its loss on predicting silence or noise.
+
+### Why JEPA is naturally more robust than pixel-reconstruction
+
+Standard MAE predicts raw spectrogram values for masked patches. Predicting
+background texture is just as expensive in the loss as predicting a call, so the
+model wastes capacity learning noise statistics. JEPA predicts in **latent space** —
+the target encoder naturally collapses similar (silent/noise) patches into a compact
+region, so correctly predicting silence gets low gradient. The representation space
+does the work of denoising.
+
+### Strategies for the FC-Audio-JEPA pipeline
+
+**Step 2 (masked JEPA pretraining) — energy-guided masking:**
+Instead of uniform random masking, sample patches to include in the context with
+probability proportional to their energy (softmax over log-mel amplitude per patch).
+Effect: high-energy patches (likely calls) are preferentially in the context; the
+predictor must predict the acoustic content, not silence. Implementation:
+
+```python
+# energy per patch: mean of log-mel values in the patch region
+energy = patch_logmel.mean(dim=(-1,-2))   # (N_patches,)
+weights = torch.softmax(energy / temp, dim=0)
+context_idx = torch.multinomial(weights, n_context, replacement=False)
+```
+
+**Step 3 (FC-JEPA fine-tuning) — window activity gating:**
+For the factorisation loss L_fact, weight each window by its acoustic activity.
+Windows where all patches are below an energy threshold contribute zero gradient
+for L_fact and L_comp; they only contribute to L_cls (which correctly gets 0-label
+BCE for absent species). In practice, keep a simple gate:
+
+```python
+window_activity = logmel.max().item()   # peak energy in window
+fact_weight = min(1.0, max(0.0, (window_activity - silence_db) / 20.0))
+L = L_cls + fact_weight * (lambda1 * L_fact + lambda2 * L_comp)
+```
+
+**Slot attention naturally handles patch sparsity:**
+P1's cross-attention queries (slots) compete for patches via softmax attention.
+In a sparse window, background patches group into one or two background slots.
+The K > N unmatched slots (where N = number of labeled species) have no factorisation
+target — they learn from L_comp and L_cls only. Empirically the background slot
+should emerge without any special loss term; if it doesn't, a diversity penalty on
+attention distributions can help.
+
+**Patch-window consistency at inference:**
+At test time, run the model on overlapping 5-second windows (2.5 s stride) and
+average predictions before thresholding. This recovers calls that happen near the
+boundary of a non-overlapping window. Cost: 2× forward passes per file.
+
+### What NOT to do
+
+- Do not filter silent windows entirely from training: the model needs negative
+  examples (all-zero labels) to calibrate its detection threshold.
+- Do not mix silent patches into the positive-slots training: Hungarian matching
+  already handles K > N by leaving slots unmatched.
+- Do not use raw spectrogram energy as a hard gate: some species (e.g. very high
+  frequency insects) have low average energy but sharp tonal peaks; use max-energy,
+  not mean.
+
+### Summary: no special windowing needed for Step 1
+
+The baseline (Step 1) is supervised BCE; L_fact and L_comp don't exist yet.
+The soft label (0.75 vs 1.0) already encodes "maybe only part of the window has
+this species." The energy-guided masking is only introduced in Step 2 pretraining.
+
 ## Open Items
 
 - Confirm local compute target for the demo.

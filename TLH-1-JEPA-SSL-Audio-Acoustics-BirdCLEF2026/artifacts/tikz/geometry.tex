@@ -1,141 +1,162 @@
-\documentclass[tikz, border=8pt]{standalone}
+\documentclass[tikz, border=14pt]{standalone}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta, calc, backgrounds, decorations.markings}
+\usetikzlibrary{arrows.meta, calc, backgrounds}
 \usepackage{amsmath}
 
 %% ── Palette ──────────────────────────────────────────────────────────────────
-\definecolor{cEc} {RGB}{ 30, 64,175}   %% z_A (indigo)
-\definecolor{cCl} {RGB}{ 22,101, 52}   %% z_B (forest green)
-\definecolor{cEt} {RGB}{ 71, 85, 99}   %% z_bg (slate)
-\definecolor{cP1} {RGB}{194, 65, 12}   %% z_comp (rust)
-\definecolor{cP2} {RGB}{109, 40,217}   %% z_mix_hat (violet)
-\definecolor{cLo} {RGB}{185, 28, 28}   %% z_mix_tgt / triangle (crimson)
-\definecolor{cCone}{RGB}{255,237,213}  %% positive cone (peach tint)
+\definecolor{cA}  {RGB}{ 74,144,226}   % blue   — z_A
+\definecolor{cB}  {RGB}{174, 36,206}   % violet — z_B
+\definecolor{cEt} {RGB}{ 71, 85, 99}   % slate  — z_bg
+\definecolor{cP1} {RGB}{194, 65, 12}   % rust   — z_comp
+\definecolor{cP2} {RGB}{100, 40,200}   % violet — z_hat
+\definecolor{cLo} {RGB}{185, 28, 28}   % crimson — z_tgt / triangle
+\definecolor{cCone}{RGB}{255,237,213}  % peach  — positive cone
 
 \begin{document}
 \begin{tikzpicture}[
+  font=\small,
+  >=Stealth,
+  %% full-weight solid vector
   vec/.style={
-    -{Stealth[length=4pt,width=2.6pt]}, line width=0.7pt
+    -{Stealth[length=4.2pt,width=2.8pt]}, line width=0.70pt
   },
-  vecm/.style={     %% medium — predicted / target vectors
-    -{Stealth[length=3.5pt,width=2.2pt]}, line width=0.58pt
+  %% medium vector (predicted / target)
+  vecm/.style={
+    -{Stealth[length=3.6pt,width=2.3pt]}, line width=0.60pt
   },
-  vecd/.style={     %% dashed — z_bg
-    -{Stealth[length=3.5pt,width=2.2pt]}, line width=0.55pt, dashed,
-    dash pattern=on 3pt off 1.4pt
+  %% dashed vector (z_bg)
+  vecd/.style={
+    -{Stealth[length=3.6pt,width=2.3pt]}, line width=0.55pt,
+    dashed, dash pattern=on 3pt off 1.5pt
   },
   ann/.style={
-    font=\fontsize{7}{8.5}\selectfont\sffamily, align=center
+    font=\fontsize{8}{9.5}\selectfont\sffamily, align=center
   },
   lann/.style={
-    font=\fontsize{6}{7}\selectfont\sffamily\itshape, text=black!55, align=center
+    font=\fontsize{6.5}{8}\selectfont\sffamily\itshape,
+    text=black!55, align=center
   },
 ]
 
 %% ── Geometry ─────────────────────────────────────────────────────────────────
-\def\R{3.6}         %% radius of unit circle (cm)
+\def\R{3.8}        % unit circle radius (cm)
 
-\def\angA{42}       %% z_A direction
-\def\angB{108}      %% z_B direction
-\def\angBG{228}     %% z_bg direction  (below-left)
+\def\angA{40}      % z_A
+\def\angB{105}     % z_B
+\def\angBG{225}    % z_bg  (below-left)
+\def\angComp{65}   % z_comp = norm(alpha_A z_A + alpha_B z_B + alpha_bg z_bg)
+\def\angHat{70}    % z_hat  (slightly above z_comp)
+\def\angTgt{60}    % z_tgt  (slightly below z_comp)
 
-\def\angComp{67}    %% z_comp = norm(z_A + z_B + z_bg)  ≈ approx
-\def\angHat{72}     %% z_mix_hat (predicted, slightly above z_comp)
-\def\angTgt{61}     %% z_mix_tgt (EMA, slightly below z_comp)
+%% Slightly shorter radii for z_hat and z_tgt so their tips form a triangle
+\def\Rhat{3.50}
+\def\Rtgt{3.45}
 
-%% ── Positive cone ────────────────────────────────────────────────────────────
+%% ── Positive-cone fill (background layer) ────────────────────────────────────
+%% Shaded from z_bg (225°) going counter-clockwise to z_A (40° = 400° equivalent)
 \begin{scope}[on background layer]
-  \fill[cCone]
+  \fill[cCone, opacity=0.55]
     (0,0)
-    -- ({\R*cos(\angBG)}, {\R*sin(\angBG)})
+    -- ({\R*cos(\angBG)},{\R*sin(\angBG)})
     arc[start angle=\angBG, end angle=\angA+360, radius=\R]
     -- cycle;
-  \node[lann, text=cP1!55]
-    at ({1.55*cos((\angA+\angComp)/2+5)}, {1.55*sin((\angA+\angComp)/2+5)})
-    {positive\\cone};
 \end{scope}
 
 %% ── Unit circle ──────────────────────────────────────────────────────────────
-\draw[gray!28, line width=0.65pt] (0,0) circle (\R cm);
+\draw[gray!30, line width=0.65pt] (0,0) circle (\R);
 
 %% Light reference axes
-\draw[gray!22, line width=0.4pt] (-\R-0.3, 0) -- (\R+0.3, 0);
-\draw[gray!22, line width=0.4pt] (0, -\R-0.3) -- (0, \R+0.3);
+\draw[gray!20, line width=0.4pt] ({-\R-0.35},0) -- ({\R+0.35},0);
+\draw[gray!20, line width=0.4pt] (0,{-\R-0.35}) -- (0,{\R+0.35});
 
 %% Origin
-\fill[black!45] (0,0) circle (2pt);
-\node[lann, below left=1.5pt] at (0,0) {$\mathbf{0}$};
+\fill[black!50] (0,0) circle (2pt);
+\node[lann, below left=2pt] at (0,0) {$O$};
 
-%% ── Component vectors ────────────────────────────────────────────────────────
-\draw[vec, color=cEc]
-  (0,0) -- ({\R*cos(\angA)}, {\R*sin(\angA)})
-  node[above right=1.5pt, ann, text=cEc] {$z_A$};
+%% ── Component vectors ─────────────────────────────────────────────────────────
+%% z_A  (blue, solid)
+\draw[vec, color=cA]
+  (0,0) -- ({\R*cos(\angA)},{\R*sin(\angA)});
+\node[ann, text=cA, above right=2pt]
+  at ({\R*cos(\angA)},{\R*sin(\angA)}) {$z_A$};
 
-\draw[vec, color=cCl]
-  (0,0) -- ({\R*cos(\angB)}, {\R*sin(\angB)})
-  node[above left=1.5pt, ann, text=cCl] {$z_B$};
+%% z_B  (violet, solid)
+\draw[vec, color=cB]
+  (0,0) -- ({\R*cos(\angB)},{\R*sin(\angB)});
+\node[ann, text=cB, above left=2pt]
+  at ({\R*cos(\angB)},{\R*sin(\angB)}) {$z_B$};
 
+%% z_bg (slate, dashed)
 \draw[vecd, color=cEt]
-  (0,0) -- ({\R*cos(\angBG)}, {\R*sin(\angBG)})
-  node[below left=1.5pt, ann, text=cEt] {$z_{\mathrm{bg}}$};
+  (0,0) -- ({\R*cos(\angBG)},{\R*sin(\angBG)});
+\node[ann, text=cEt, below left=2pt]
+  at ({\R*cos(\angBG)},{\R*sin(\angBG)}) {$z_{\mathrm{bg}}$};
 
-%% ── z_comp (heavier — this is the key target) ───────────────────────────────
-\draw[vec, color=cP1, line width=1.0pt]
-  (0,0) -- ({\R*cos(\angComp)}, {\R*sin(\angComp)})
-  node[right=3.5pt, ann, text=cP1]
-    {$z_{\mathrm{comp}}$\\[-1pt]
-     ${\scriptstyle =\,\mathrm{norm}(\sum\!\alpha_i z_i)}$};
+%% ── z_comp (thicker, rust) ────────────────────────────────────────────────────
+\draw[vec, color=cP1, line width=1.00pt]
+  (0,0) -- ({\R*cos(\angComp)},{\R*sin(\angComp)});
+%% label placed clearly to the right; scriptsize formula below
+\node[ann, text=cP1, anchor=west]
+  at ({\R*cos(\angComp)+0.25},{\R*sin(\angComp)+0.10})
+  {$z_{\mathrm{comp}}$};
+\node[font=\fontsize{6}{7}\selectfont\sffamily, text=cP1!80, anchor=west]
+  at ({\R*cos(\angComp)+0.25},{\R*sin(\angComp)-0.24})
+  {$=\,\mathrm{norm}(\textstyle\sum\alpha_i z_i)$};
 
-%% ── Predicted and target (shorter, near z_comp) ──────────────────────────────
-\def\Rhat{3.35}
-\def\Rtgt{3.25}
-
+%% ── z_hat (violet, medium, R_hat) ────────────────────────────────────────────
 \draw[vecm, color=cP2]
-  (0,0) -- ({\Rhat*cos(\angHat)}, {\Rhat*sin(\angHat)})
-  node[right=3pt, ann, text=cP2] {$\hat{z}_{\mathrm{mix}}$};
+  (0,0) -- ({\Rhat*cos(\angHat)},{\Rhat*sin(\angHat)});
+\node[ann, text=cP2, anchor=west]
+  at ({\Rhat*cos(\angHat)+0.20},{\Rhat*sin(\angHat)+0.08}) {$\hat{z}$};
 
+%% ── z_tgt (crimson, medium, R_tgt) ──────────────────────────────────────────
 \draw[vecm, color=cLo]
-  (0,0) -- ({\Rtgt*cos(\angTgt)}, {\Rtgt*sin(\angTgt)})
-  node[right=3pt, ann, text=cLo] {$z_{\mathrm{mix}}^{\mathrm{tgt}}$};
+  (0,0) -- ({\Rtgt*cos(\angTgt)},{\Rtgt*sin(\angTgt)});
+\node[ann, text=cLo, anchor=west]
+  at ({\Rtgt*cos(\angTgt)+0.20},{\Rtgt*sin(\angTgt)-0.28}) {$z_{\mathrm{tgt}}$};
 
-%% ── Triangle (consistency constraint) ────────────────────────────────────────
+%% ── Triangle: z_comp -- z_hat -- z_tgt ───────────────────────────────────────
 \coordinate (Pcomp) at ({\R*cos(\angComp)},    {\R*sin(\angComp)});
 \coordinate (Phat)  at ({\Rhat*cos(\angHat)},  {\Rhat*sin(\angHat)});
 \coordinate (Ptgt)  at ({\Rtgt*cos(\angTgt)},  {\Rtgt*sin(\angTgt)});
 
-\draw[cLo!60, line width=0.7pt]
+\draw[cLo!60, line width=0.70pt]
   (Pcomp) -- (Phat) -- (Ptgt) -- cycle;
 
-%% Vertex dots
-\fill[cP1] (Pcomp) circle (2.5pt);
-\fill[cP2] (Phat)  circle (2.5pt);
-\fill[cLo] (Ptgt)  circle (2.5pt);
+%% vertex dots
+\fill[cP1] (Pcomp) circle (2.2pt);
+\fill[cP2] (Phat)  circle (2.2pt);
+\fill[cLo] (Ptgt)  circle (2.2pt);
 
-%% ── Triangle consistency callout ─────────────────────────────────────────────
-\draw[gray!40, line width=0.4pt]
-  (Pcomp) to[out=50, in=190] (6.6, 3.0);
-
+%% ── Triangle consistency callout box ─────────────────────────────────────────
+%% Box placed far right at x >= 5.5 so it doesn't overlap vector labels
 \node[
-  rectangle, rounded corners=2.5pt,
-  draw=cLo!42, line width=0.42pt, fill=cLo!5,
-  inner sep=5pt,
-  font=\fontsize{6.5}{8}\selectfont\sffamily, align=left, text=cLo!90,
+  rectangle, rounded corners=3pt,
+  draw=cLo!50, line width=0.55pt, fill=cLo!5,
+  inner sep=6pt,
+  font=\fontsize{7}{9}\selectfont\sffamily,
+  align=left, text=cLo!85,
   anchor=west
-] at (6.7, 3.0)
+] (callout) at (5.60, 2.60)
 {
-  \textbf{Triangle consistency}\\[2pt]
-  $\hat{z}_{\mathrm{mix}} \approx z_{\mathrm{comp}}$\\
-  $\hat{z}_{\mathrm{mix}} \approx z_{\mathrm{mix}}^{\mathrm{tgt}}$\\
-  $z_{\mathrm{mix}}^{\mathrm{tgt}} \approx z_{\mathrm{comp}}$
+  \textbf{Triangle consistency}\\[3pt]
+  $\hat{z} \approx z_{\mathrm{comp}}$\\[1pt]
+  $\hat{z} \approx z_{\mathrm{tgt}}$\\[1pt]
+  $z_{\mathrm{tgt}} \approx z_{\mathrm{comp}}$
 };
 
-%% ── Bottom annotation ────────────────────────────────────────────────────────
-\node[lann] at (0, -\R-0.85)
-  {$\|\mathbf{z}\| = 1$ \quad unit hypersphere \quad cosine distance};
+%% soft pointer line from Pcomp to callout
+\draw[gray!38, line width=0.40pt]
+  (Pcomp) to[out=30, in=190] (callout.west);
 
-%% Non-negative gates annotation
-\node[lann, text=cP1!80, anchor=east] at (-\R-0.3, 1.6)
-  {$\alpha_i \geq 0$\\non-neg.\\gates};
+%% ── Gates / non-negative annotation  (left side) ─────────────────────────────
+\node[lann, text=cP1!80, anchor=east]
+  at ({-\R-0.40}, 1.55)
+  {$\alpha_i \geq 0$\\[1pt]gates};
+
+%% ── Bottom centre annotation ─────────────────────────────────────────────────
+\node[lann] at (0,{-\R-0.85})
+  {$\|\mathbf{z}\|=1$ \quad unit hypersphere \quad cosine distance};
 
 \end{tikzpicture}
 \end{document}

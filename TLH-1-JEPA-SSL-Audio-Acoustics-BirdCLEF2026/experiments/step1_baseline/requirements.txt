@@ -1,0 +1,9 @@
+torch>=2.2.0
+torchaudio>=2.2.0
+numpy>=1.24,<2.0       # torch 2.2.x was compiled against NumPy 1.x ABI
+pandas>=2.0
+scikit-learn>=1.3
+wandb>=0.17
+pyyaml>=6.0
+tqdm>=4.65
+soundfile>=0.12        # ogg loading fallback when torchcodec unavailable
