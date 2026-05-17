@@ -1,0 +1,42 @@
+# Step 4: Clean FC-JEPA — hyperparameters
+
+audio:
+  sample_rate: 32000
+  n_mels: 128
+  n_fft: 1024
+  hop_length: 320
+  duration: 5.0
+
+model:
+  d_model: 256
+  n_heads: 4
+  n_layers: 4
+  patch_size: 16
+  dropout: 0.1
+  k_max: 6            # max sources per window (1 bg + 5 species)
+  n_slot_iter: 3
+
+training:
+  epochs: 30
+  batch_size: 32      # scaled to 64 on A100 automatically
+  lr: 5.0e-4
+  weight_decay: 0.05
+  warmup_epochs: 2
+  tau_ema: 0.996
+
+losses:
+  lambda_fact: 1.0    # L_fact: Hungarian cosine distance (slots → per-source targets)
+  lambda_comp: 0.5    # L_comp: P2 prediction → algebraic composition z_comp
+  lambda_sig:  0.1    # L_sig:  SIGReg on CLS token + slot embeddings
+  n_proj_sig:  64     # random projections for SIGReg moment-matching proxy
+
+data:
+  data_root: /kaggle/input/birdclef-2026
+  num_workers: 4
+  val_fraction: 0.15
+  seed: 42
+  include_empty_windows: true   # empty windows train z_bg factorization
+
+checkpoint:
+  warm_start: /kaggle/input/prabakaranchand-fc-jepa-step3-ckpt/best.pt
+  out_dir: /kaggle/working/checkpoints

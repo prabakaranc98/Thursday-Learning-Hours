@@ -1,0 +1,18 @@
+{
+  "id": "prabakaranchand/birdclef-2026-fc-jepa-step4",
+  "title": "FC Audio JEPA Step 4: Clean FC-JEPA + SIGReg",
+  "code_file": "train.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "prabakaranchand/prabakaranchand-fc-jepa-step3-ckpt"
+  ],
+  "competition_sources": [
+    "birdclef-2026"
+  ],
+  "kernel_sources": []
+}

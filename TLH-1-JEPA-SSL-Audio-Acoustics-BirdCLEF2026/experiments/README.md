@@ -184,3 +184,83 @@ kernel that mounts competition test data. Checkpoint to upload: `best.pt` (epoch
 3. **K ablation:** Try K=4, K=12. K=8 with Hungarian matching to M=3 targets leaves 5 slots unguided.
 4. **Mode 3 (real soundscape):** Current Mode 2 uses synthetic audio mixing. A Mode 3 using real labeled soundscapes (pairing a window with its annotated species clips) would provide cleaner signal.
 5. **Masking:** Add spectral masking (frequency bands) to the context before passing to E_c — forces P1 to predict from incomplete context, the true JEPA setup.
+
+---
+
+### Step 4 — Clean FC-JEPA + SIGReg (running)
+
+**Motivation:** Step 3 had three architecture flaws identified by root-cause analysis:
+1. **Mode 1 was BYOL, not JEPA** — same clip fed to both E_c and E_t, no view gap, no factorization signal
+2. **Composition in spectrogram space** — `spec_mix = w₀·x_A + w₁·x_B + w₂·x_bg` mixes audio before encoding; semantic factorization requires composition in *representation space*
+3. **K=8 with M=3 targets** — 5 slots received zero gradient from L_fact, causing identity collapse
+
+**Architecture (`experiments/step4_clean_fcjepa/`):**
+
+```
+E_c  context encoder (trainable ViT)   — sees real noisy soundscape windows
+E_t  target encoder (EMA, stop-grad)   — sees label-conditioned clean audio
+P1   SlotAttentionV4 (K_max=6)         — per-slot learned mu (vs shared mu in step3)
+P2   ComposePredictor                  — slots → predicted composition embedding
+clf  SlotClassifier (max+mean pool)
+cls_head  Linear(D, n_cls)             — CLS bypass, warm-started from step3
+```
+
+**Key change — view gap (true JEPA):**
+```
+E_c input : real soundscape window (noisy, all species mixed)
+E_t input : label-conditioned clean audio per species present in that window
+            → stitch random clips from train_audio/[taxon_id]/ per species
+            → white noise for empty (silent) windows
+```
+
+**Key change — representation-space composition:**
+```
+z_comp = F.normalize(z_s1 + z_s2 + ... + z_sm, dim=-1)
+```
+Computed algebraically from individual species embeddings. No mixed audio ever enters E_t.
+
+**Key change — K = M dynamic slots:**
+`n_slots = n_active.max()` per batch; unused slots masked out of Hungarian matching loss.
+Per-slot `slot_mu ∈ ℝ^{K×D}` (vs shared `ℝ^{1×D}`) gives each slot a distinct learned starting point.
+
+**Key change — SIGReg (LeWorldModel arXiv:2603.19312):**
+Replaces VICReg variance + slot diversity Gram loss with a single principled regularizer.
+Uses Cramér-Wold theorem: a distribution is N(0,I) iff every 1D projection is N(0,1).
+Moment-matching proxy (kurtosis + skewness) — O(B × n_proj), no hyperparameter tuning.
+Applied to CLS tokens and all slot embeddings every step.
+
+**Loss:**
+```
+L = L_cls + 1.0·L_fact + 0.5·L_comp + 0.1·L_sig
+
+L_cls  = BCEWithLogitsLoss(cls+slot logits, y)    [labeled samples only]
+L_fact = Hungarian cosine distance(slots[:n_active], {z_si})
+L_comp = 1 − cosine_sim(P2(slots, acts), z_comp)  [multi-source windows only]
+L_sig  = sig_reg(cls_norm) + sig_reg(slots_norm)  [all samples incl. unlabeled]
+```
+
+**Full data utilization:**
+
+| Source | Samples | Signal |
+|---|---|---|
+| `train_soundscapes_labels.csv` | 638 windows (57 files) | Full JEPA: L_fact + L_comp + L_cls |
+| `train_audio/` curated clips | ~30K clips (206 species) | Single-species JEPA (different crop = target) + L_cls w/ secondary labels |
+| `train_soundscapes/` unlabeled | 127,896 windows (10,658 files), 8,192/epoch | SIGReg only — real Pantanal acoustics, same sites as test |
+
+**Training:** batch=128, lr=5e-4 (linear warmup 2 epochs → cosine), A100, warm start from step3 best.pt.  
+Differential LR: enc_ctx at 10× lower than new heads.
+
+**WandB:** https://wandb.ai/karan98/fc-audio-jepa  
+**Checkpoint:** `/workspace/tlh1/outputs/step4/checkpoints/best.pt`
+
+#### Step 4 — architecture and implementation lessons
+
+| Issue | Root cause | Fix |
+|---|---|---|
+| Warm start size mismatch | slot_mu shape (1,1,D)→(1,K,D) changed | Filter state dict by shape before `load_state_dict(strict=False)` |
+| LR stuck at ~0 | Warmup set `initial_lr` from already-zeroed LR at step 0 | Replaced manual warmup with `SequentialLR(LinearLR, CosineAnnealingLR)` |
+| `autocast` TypeError on PyTorch 2.6 | `torch.cuda.amp.autocast(device_type=...)` deprecated | Use `torch.amp.autocast(device_type, dtype=...)` |
+| `GradScaler` deprecation | Same | `GradScaler("cuda", enabled=...)` |
+| Overfitting (638 windows, 30 epochs) | Too few soundscape windows for full classifier training | Added 30K curated clips + 8K unlabeled soundscapes per epoch |
+| NaN in L_fact at epoch 1 | bfloat16 + random slot init at warmup LR | GradScaler skips NaN steps; stable from epoch 2 |
+| Host key changed after reboot | SSH reconnect failure | `ssh-keygen -R` then `StrictHostKeyChecking=no` |
